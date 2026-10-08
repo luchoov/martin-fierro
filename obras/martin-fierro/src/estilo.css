@@ -12,6 +12,9 @@
   /* Celular: franja de papel abajo. Escritorio: columna a la izquierda (ver la media query). */
   --franja: 44vh;
   --lado: 16px;
+  /* Márgenes laterales que respetan la muesca. */
+  --izq: max(var(--lado), calc(env(safe-area-inset-left, 0px) + 8px));
+  --der: max(var(--lado), calc(env(safe-area-inset-right, 0px) + 8px));
   --pie: max(10px, env(safe-area-inset-bottom));
   --folio: 0px;
   --verso: clamp(1.04rem, 0.6rem + 1.2vw, 1.3rem);
@@ -70,7 +73,7 @@ html {
   height: var(--alto);
   display: grid;
   place-items: center;
-  padding: 24px var(--lado);
+  padding: max(24px, env(safe-area-inset-top)) var(--der) max(24px, env(safe-area-inset-bottom)) var(--izq);
 }
 
 .paso-intro {
@@ -114,8 +117,8 @@ html {
 
 .folio {
   position: absolute;
-  left: var(--lado);
-  right: var(--lado);
+  left: var(--izq);
+  right: var(--der);
   bottom: var(--pie);
   display: flex;
   flex-wrap: wrap;
@@ -182,8 +185,8 @@ body.sin-texto #columna {
 
 .hoja {
   position: fixed;
-  left: var(--lado);
-  right: var(--lado);
+  left: var(--izq);
+  right: var(--der);
   bottom: calc(var(--pie) + 2.3rem + var(--folio));
   max-height: calc(var(--franja) - 3.4rem - var(--folio));
   overflow: auto;
@@ -584,8 +587,8 @@ body[data-sentido='atras'] .hoja.activo .linea {
 
 .ayuda {
   position: fixed;
-  top: 10px;
-  right: 10px;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, calc(env(safe-area-inset-right) + 4px));
   width: 30px;
   height: 30px;
   padding: 0;
@@ -605,9 +608,9 @@ body[data-tipo='portada'] .ayuda {
 
 .nota {
   position: fixed;
-  top: 48px;
-  left: var(--lado);
-  right: var(--lado);
+  top: calc(48px + env(safe-area-inset-top, 0px));
+  left: var(--izq);
+  right: var(--der);
   padding: 0.85rem 1rem 0.9rem;
   background: var(--papel-nota);
   border: 0.75px solid rgba(201, 57, 46, 0.5);
@@ -662,7 +665,7 @@ kbd {
 
 @media (min-width: 760px) and (min-aspect-ratio: 11/10) {
   :root {
-    --col: clamp(330px, 35vw, 580px);
+    --col: calc(clamp(330px, 35vw, 580px) + env(safe-area-inset-left, 0px));
     --lado: max(28px, 4.2vw);
     --verso: clamp(1.05rem, 0.55rem + 0.8vw, 1.5rem);
     --interlinea: 1.55;
@@ -679,23 +682,23 @@ kbd {
   .cabeza {
     display: flex;
     position: absolute;
-    top: var(--vert);
-    left: var(--lado);
+    top: max(var(--vert), env(safe-area-inset-top));
+    left: var(--izq);
     right: 28px;
     padding-bottom: 0.55rem;
     border-bottom: 0.5px solid var(--filete);
   }
 
   .folio {
-    left: var(--lado);
+    left: var(--izq);
     right: 28px;
-    bottom: var(--vert);
+    bottom: max(var(--vert), env(safe-area-inset-bottom));
   }
 
   .hoja {
-    left: var(--lado);
+    left: var(--izq);
     right: auto;
-    width: calc(var(--col) - var(--lado) - 28px);
+    width: calc(var(--col) - var(--izq) - 28px);
     bottom: auto;
     max-height: calc(100vh - 2 * var(--vert) - 5.4rem - 2 * var(--folio));
   }
@@ -719,14 +722,14 @@ kbd {
   .nota {
     top: auto;
     left: auto;
-    right: 16px;
-    bottom: 16px;
+    right: max(16px, calc(env(safe-area-inset-right) + 8px));
+    bottom: max(16px, env(safe-area-inset-bottom));
     width: 19rem;
   }
 
   .ayuda {
-    top: 14px;
-    right: 14px;
+    top: max(14px, env(safe-area-inset-top));
+    right: max(14px, calc(env(safe-area-inset-right) + 4px));
   }
 }
 
@@ -750,7 +753,7 @@ kbd {
   .hoja-intro,
   .hoja-cierre {
     top: calc(var(--vert) + 0.3rem);
-    bottom: calc(var(--vert) + 4.4rem);
+    bottom: calc(max(var(--vert), env(safe-area-inset-bottom)) + 4.4rem);
     max-height: none;
     transform: none;
   }
@@ -765,7 +768,7 @@ kbd {
   }
 
   .paso-portada {
-    padding: 10px var(--lado);
+    padding: 10px var(--der) 10px var(--izq);
   }
 
   .tapa {
