@@ -2,9 +2,9 @@ import { iso, groundRadii } from '../core/iso';
 import { Rng } from '../core/rng';
 import type { Vec2 } from '../core/math';
 import { Drawer } from '../draw/drawer';
-import { ellipsePts, tracePath, type Pts } from '../draw/hand';
+import { ellipsePts, type Pts } from '../draw/hand';
 import { Ink } from '../print/ink';
-import { Mode, type Op, type Separation } from '../print/separation';
+import { Mode, type Op } from '../print/separation';
 import type { Actor } from './actor';
 
 /** Todo lo que se ordena por profundidad: objetos y actores. */
@@ -23,6 +23,17 @@ export interface Item {
 }
 
 type DrawFn = (d: Drawer, w: World) => void;
+
+/** El mundo entrega mallas al grabarlas, sin depender del contexto de impresión. */
+interface MeshRecorder {
+  prepare(ops: readonly Op[], dynamic?: boolean): void;
+  beginDynamic(): void;
+  endDynamic(): void;
+}
+
+interface Replay {
+  play(ops: readonly Op[]): void;
+}
 
 /** Variantes de temblor: cada pieza fija se graba tres veces y se alternan a ~3 Hz. */
 export const VARIANTS = 3;
@@ -44,12 +55,13 @@ export class Prop implements Item {
     this.z0 = z0;
   }
 
-  bake(d: Drawer, w: World): void {
+  bake(d: Drawer, w: World, meshes?: MeshRecorder): void {
     const b = [Infinity, Infinity, -Infinity, -Infinity];
     for (let v = 0; v < VARIANTS; v++) {
       d.begin(this.seed, v, 1);
       this.draw(d, w);
       this.variants[v] = d.ops;
+      meshes?.prepare(d.ops);
       b[0] = Math.min(b[0], d.b[0]);
       b[1] = Math.min(b[1], d.b[1]);
       b[2] = Math.max(b[2], d.b[2]);
@@ -205,7 +217,7 @@ export class World {
     return this.actors.find((a) => a.name === name);
   }
 
-  bake(d: Drawer): void {
+  bake(d: Drawer, meshes?: MeshRecorder): void {
     for (let v = 0; v < VARIANTS; v++) {
       const ops: Op[] = [];
       for (const g of this.groundFns) {
@@ -214,8 +226,9 @@ export class World {
         ops.push(...d.ops);
       }
       this.groundOps[v] = ops;
+      meshes?.prepare(ops);
     }
-    for (const it of this.items) if (it instanceof Prop) it.bake(d, this);
+    for (const it of this.items) if (it instanceof Prop) it.bake(d, this, meshes);
   }
 
   update(dt: number): void {
@@ -258,24 +271,37 @@ export class World {
   }
 
   /** Cuadro de animación: graba lo que se mueve y reordena por profundidad. */
-  tick(d: Drawer): void {
-    for (const it of this.items) if (it.record && it.visible && !it.carried) it.record(d, this);
+  tick(d: Drawer, meshes?: MeshRecorder): void {
+    meshes?.beginDynamic();
+    for (const it of this.items) {
+      if (it.record && it.visible && !it.carried) {
+        it.record(d, this);
+        meshes?.prepare(it.ops(this), true);
+      }
+    }
     d.begin(4242, this.variant, this.zoom);
     for (const fn of this.overlayFns) fn(d, this);
     this.drawParticles(d);
     this.overlayOps = d.ops;
+    meshes?.prepare(this.overlayOps, true);
     d.begin(5151, this.variant, this.zoom);
     this.drawLights(d);
     this.lightOps = d.ops;
+    meshes?.prepare(this.lightOps, true);
+    meshes?.endDynamic();
     this.sort();
   }
 
-  renderGround(sep: Separation): void {
+  renderGround(sep: Replay): void {
     sep.play(this.groundOps[this.variant] ?? []);
   }
 
-  render(sep: Separation): void {
-    for (const it of this.sorted) sep.play(it.ops(this));
+  render(sep: Replay, view?: readonly number[]): void {
+    for (const it of this.sorted) {
+      const b = it.b;
+      if (view && (b[2] < view[0] || b[0] > view[2] || b[3] < view[1] || b[1] > view[3])) continue;
+      sep.play(it.ops(this));
+    }
     sep.play(this.overlayOps);
     sep.play(this.lightOps);
   }
@@ -314,9 +340,7 @@ export class World {
       const steps = Math.round(this.dusk * 4) / 4;
       if (steps > 0) {
         // Un solo relleno para todas las regiones: donde se pisan no se suma dos veces.
-        const p = new Path2D();
-        for (const r of this.duskRegion) tracePath(p, r, true, false);
-        d.ops.push({ m: Mode.Add, p, i: this.duskInk.scale(steps), a: 1 });
+        d.regions(Mode.Add, this.duskRegion, this.duskInk.scale(steps));
       }
     }
     for (const L of this.lights) {

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Verificación del rasterizador GPU de Trama</title>
+<body><pre id="resultado">Verificando…</pre>
+<script type="module">
+  import { verificarGpu } from './gpu-browser.mjs';
+  try {
+    window.tramaGpuVerification = verificarGpu();
+    document.querySelector('#resultado').textContent = JSON.stringify(window.tramaGpuVerification, null, 2);
+    if (window.tramaGpuVerification.fallos.length) throw new Error('Fallaron comprobaciones de píxeles');
+  } catch (error) {
+    document.querySelector('#resultado').textContent += '\n' + error.stack;
+    throw error;
+  }
+</script>
+</body>
+</html>

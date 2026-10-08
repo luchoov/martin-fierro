@@ -1,6 +1,7 @@
 import { clamp, smoothstep } from '../core/math';
 import { hexToRgb, type InkSet } from './ink';
-import type { Separation } from './separation';
+import { Separation } from './separation';
+import type { GpuSeparation } from './gpu-separation';
 
 const VERT = `#version 300 es
 void main() {
@@ -155,18 +156,19 @@ export interface PrintView {
 
 /** Tiempos del último cuadro impreso (ms). gpu* = -1 si no hay medición. */
 export interface PrintTiming {
-  upload: number;
+  raster: number;
   draw: number;
-  gpuUpload: number;
+  gpuRaster: number;
   gpuDraw: number;
-  /** Medición sincrónica (subida + shader esperando a la GPU), si no hay consulta de tiempos. */
+  /** Medición sincrónica (separación + shader esperando a la GPU), si no hay consulta de tiempos. */
   sync: number;
 }
 
 type TimerExt = { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number };
 
 export class RisoPrinter {
-  private gl: WebGL2RenderingContext;
+  readonly gl: WebGL2RenderingContext;
+  private vao: WebGLVertexArrayObject;
   private prog: WebGLProgram;
   private texA: WebGLTexture;
   private texB: WebGLTexture;
@@ -188,14 +190,14 @@ export class RisoPrinter {
   press: [number, number, number, number] = [1, 1, 1, 1];
   /** Medir tiempos de GPU (modo ?debug). */
   measure = false;
-  /** Esperar a la GPU después de cada impresión (benchmark): sync mide raster 2D + subida + shader. */
+  /** Esperar a la GPU después de cada impresión (benchmark): sync mide separación + shader. */
   wait = false;
-  readonly timing: PrintTiming = { upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1 };
+  readonly timing: PrintTiming = { raster: 0, draw: 0, gpuRaster: -1, gpuDraw: -1, sync: -1 };
   /** Celda (px de dispositivo) y mezcla puntos/tono del último cuadro. */
   cellDev = 0;
   screen = 1;
   private timer: TimerExt | null | undefined;
-  private queries: { q: WebGLQuery; kind: 'gpuUpload' | 'gpuDraw' }[] = [];
+  private queries: { q: WebGLQuery; kind: 'gpuRaster' | 'gpuDraw' }[] = [];
   private pixel = new Uint8Array(4);
 
   constructor(readonly canvas: HTMLCanvasElement, inks: InkSet) {
@@ -214,7 +216,8 @@ export class RisoPrinter {
       this.angles.push((ink.angle * Math.PI) / 180);
       this.mis.push(ink.misreg[0], ink.misreg[1]);
     }
-    gl.bindVertexArray(gl.createVertexArray());
+    this.vao = gl.createVertexArray()!;
+    gl.bindVertexArray(this.vao);
   }
 
   private link(vs: string, fs: string): WebGLProgram {
@@ -245,18 +248,19 @@ export class RisoPrinter {
     return t;
   }
 
-  private upload(tex: WebGLTexture, src: HTMLCanvasElement, unit: number, which: 'A' | 'B'): void {
+  /** Sólo la comparación 2D necesita transferir lienzos a las texturas. */
+  private canvasSeparations(sep: Separation): void {
     const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    const size = `${src.width}x${src.height}`;
-    const prev = which === 'A' ? this.sizeA : this.sizeB;
-    if (prev !== size) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-      if (which === 'A') this.sizeA = size;
-      else this.sizeB = size;
-    } else {
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    for (const [unit, tex, src, which] of [[0, this.texA, sep.c1, 'A'], [1, this.texB, sep.c2, 'B']] as const) {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      const size = `${src.width}x${src.height}`;
+      const prev = which === 'A' ? this.sizeA : this.sizeB;
+      if (prev !== size) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+        if (which === 'A') this.sizeA = size;
+        else this.sizeB = size;
+      } else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
     }
   }
 
@@ -267,7 +271,7 @@ export class RisoPrinter {
     return { cellPx, cellDev, screen: smoothstep(this.toneBelow, this.dotsAbove, cellDev) };
   }
 
-  render(sep: Separation, v: PrintView): void {
+  render(sep: Separation | GpuSeparation, v: PrintView): void {
     const gl = this.gl;
     const W = Math.round(v.cssW * v.dpr);
     const H = Math.round(v.cssH * v.dpr);
@@ -279,12 +283,21 @@ export class RisoPrinter {
     const timer = this.measure ? this.timerExt() : null;
 
     const t0 = performance.now();
-    let q = timer ? this.begin(timer, 'gpuUpload') : null;
-    this.upload(this.texA, sep.c1, 0, 'A');
-    this.upload(this.texB, sep.c2, 1, 'B');
+    let q = timer ? this.begin(timer, 'gpuRaster') : null;
+    if (sep instanceof Separation) this.canvasSeparations(sep);
+    else sep.finish();
     if (q && timer) gl.endQuery(timer.TIME_ELAPSED_EXT);
     const t1 = performance.now();
 
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindVertexArray(this.vao);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.STENCIL_TEST);
+    gl.colorMask(true, true, true, true);
+    for (const [unit, tex] of [sep instanceof Separation ? this.texA : sep.texA, sep instanceof Separation ? this.texB : sep.texB].entries()) {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+    }
     gl.viewport(0, 0, W, H);
     gl.useProgram(this.prog);
     const u = this.u;
@@ -315,7 +328,7 @@ export class RisoPrinter {
     if (q && timer) gl.endQuery(timer.TIME_ELAPSED_EXT);
     const t2 = performance.now();
 
-    this.timing.upload = t1 - t0;
+    this.timing.raster = t1 - t0;
     this.timing.draw = t2 - t1;
     this.timing.sync = -1;
     if (this.wait || (this.measure && !timer)) {
@@ -330,7 +343,7 @@ export class RisoPrinter {
     return this.timer;
   }
 
-  private begin(ext: TimerExt, kind: 'gpuUpload' | 'gpuDraw'): WebGLQuery | null {
+  private begin(ext: TimerExt, kind: 'gpuRaster' | 'gpuDraw'): WebGLQuery | null {
     if (this.queries.length > 8) return null;
     const q = this.gl.createQuery();
     if (!q) return null;

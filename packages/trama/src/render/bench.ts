@@ -7,7 +7,7 @@ export type BenchKind = 'quieto' | 'paneo' | 'zoom';
  * Pasadas del recorrido:
  * - fluido: cuadros reales (requestAnimationFrame) sin esperar a la GPU; da los cuadros por segundo.
  * - desglose: espera a la GPU después de cada impresión; da lo que cuesta la impresión entera
- *   (con el lienzo 2D acelerado, el rasterizado ocurre en la GPU y si no, no se vería).
+ *   desde el envío de las separaciones hasta el shader y su espera.
  */
 export type BenchPass = 'fluido' | 'desglose';
 
@@ -52,16 +52,18 @@ export interface BenchRow {
   late?: number;
   /** Impresiones por cuadro. */
   prints: number;
-  /** Trabajo del hilo principal por cuadro (mundo + grabación + piso + dibujo + raster/subida + shader). */
+  /** Trabajo del hilo principal por cuadro (mundo + grabación/subida de mallas + cola + raster + shader). */
   cpu: Dist;
   update: Dist;
   tick: Dist;
   ground: Dist;
   items: Dist;
-  upload: Dist;
+  raster: Dist;
   draw: Dist;
-  /** Impresión entera esperando a la GPU: piso + dibujo + raster + subida + shader (pasada desglose). */
+  /** Impresión entera esperando a la GPU: piso + ítems + separaciones + shader (pasada desglose). */
   print?: Dist;
+  /** Raster + resolve WebGL2, o subida de los lienzos 2D, medido en la GPU. */
+  gpuRaster?: Dist;
   /** Shader medido en la GPU (si el navegador ofrece la consulta de tiempos). */
   gpu?: Dist;
   ops: number;
@@ -81,9 +83,10 @@ interface Sample {
   ticked: boolean;
   ground: number;
   items: number;
-  upload: number;
+  raster: number;
   draw: number;
   sync: number;
+  gpuRaster: number;
   gpu: number;
   drawn: boolean;
   ops: number;
@@ -96,9 +99,10 @@ const sample = (s: FrameStats, interval: number): Sample => ({
   ticked: s.ticked,
   ground: s.drawn ? s.ground : 0,
   items: s.drawn ? s.items : 0,
-  upload: s.drawn ? s.upload : 0,
+  raster: s.drawn ? s.raster : 0,
   draw: s.drawn ? s.draw : 0,
   sync: s.drawn ? s.sync : -1,
+  gpuRaster: s.drawn ? s.gpuRaster : -1,
   gpu: s.drawn ? s.gpuDraw : -1,
   drawn: s.drawn,
   ops: s.drawn ? s.ops : 0,
@@ -112,7 +116,7 @@ function dist(v: number[]): Dist {
   return { p50: at(0.5), p95: at(0.95), n: s.length };
 }
 
-const cpuOf = (s: Sample) => s.update + s.tick + s.ground + s.items + s.upload + s.draw;
+const cpuOf = (s: Sample) => s.update + s.tick + s.ground + s.items + s.raster + s.draw;
 
 function row(name: string, kind: BenchRow['kind'], fluid: Sample[], split: Sample[]): BenchRow {
   // Los tiempos de CPU salen de la pasada fluida si la hubo (la otra frena a propósito).
@@ -127,7 +131,7 @@ function row(name: string, kind: BenchRow['kind'], fluid: Sample[], split: Sampl
     tick: dist(base.filter((s) => s.ticked).map((s) => s.tick)),
     ground: dist(drawn.map((s) => s.ground)),
     items: dist(drawn.map((s) => s.items)),
-    upload: dist(drawn.map((s) => s.upload)),
+    raster: dist(drawn.map((s) => s.raster)),
     draw: dist(drawn.map((s) => s.draw)),
     ops: dist(drawn.map((s) => s.ops)).p50,
   };
@@ -142,6 +146,8 @@ function row(name: string, kind: BenchRow['kind'], fluid: Sample[], split: Sampl
   if (printed.length) r.print = dist(printed.map((s) => s.ground + s.items + s.sync));
   const gpu = split.filter((s) => s.drawn && s.gpu >= 0);
   if (gpu.length) r.gpu = dist(gpu.map((s) => s.gpu));
+  const gpuRaster = split.filter((s) => s.drawn && s.gpuRaster >= 0);
+  if (gpuRaster.length) r.gpuRaster = dist(gpuRaster.map((s) => s.gpuRaster));
   return r;
 }
 
@@ -149,11 +155,12 @@ const COLS: { key: keyof BenchRow; label: string }[] = [
   { key: 'frame', label: 'cuadro' },
   { key: 'cpu', label: 'CPU/cuadro' },
   { key: 'tick', label: 'grabación' },
-  { key: 'ground', label: 'piso' },
-  { key: 'items', label: 'dibujo' },
-  { key: 'upload', label: 'raster+subida' },
+  { key: 'ground', label: 'piso CPU' },
+  { key: 'items', label: 'ítems CPU' },
+  { key: 'raster', label: 'separaciones CPU' },
   { key: 'draw', label: 'shader CPU' },
   { key: 'print', label: 'impresión+GPU' },
+  { key: 'gpuRaster', label: 'separaciones GPU' },
   { key: 'gpu', label: 'shader GPU' },
 ];
 
@@ -161,7 +168,11 @@ const num = (v: number, d = 1) => (Number.isFinite(v) ? v.toFixed(d).replace('.'
 const cell = (d: Dist | undefined) => (d && d.n ? `${num(d.p50)}/${num(d.p95)}` : '–');
 
 function format(meta: BenchReport['meta'], rows: BenchRow[]): { text: string; markdown: string } {
-  const head = ['tramo', 'fps', '>20ms', 'impr/c', ...COLS.map((c) => c.label), 'ops'];
+  const webgl = meta.rasterizador === 'webgl2';
+  const labels: Partial<Record<keyof BenchRow, string>> = webgl
+    ? { tick: 'grabación+mallas', ground: 'cola piso CPU', items: 'cola ítems CPU', raster: 'envío+resolve CPU', gpuRaster: 'raster+resolve GPU' }
+    : { raster: 'raster 2D+subida CPU', gpuRaster: 'subida GPU' };
+  const head = ['tramo', 'fps', '>20ms', 'impr/c', ...COLS.map((c) => labels[c.key] ?? c.label), 'ops'];
   const body = rows.map((r) => [
     r.name,
     r.fps === undefined ? '–' : num(r.fps, 0),
@@ -316,6 +327,7 @@ export async function runBench(stage: Stage, legs: BenchLeg[], o: BenchOptions =
     lamina: `${stage.canvas.width}×${stage.canvas.height}`,
     separaciones: `${sep} (×${stage.sepScale})`,
     calidad: `q${stage.quality}`,
+    rasterizador: stage.raster,
     pasadas: passes.join(' + ') + (manual ? ' (manual: sin requestAnimationFrame)' : ''),
   };
   const { text, markdown } = format(meta, rows);

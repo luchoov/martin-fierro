@@ -4,19 +4,19 @@ import type { FrameStats, Stage } from './stage';
 const PARTS: { key: keyof FrameStats; label: string; color: string }[] = [
   { key: 'update', label: 'mundo', color: '#9a9a9a' },
   { key: 'tick', label: 'grabación', color: '#EBA834' },
-  { key: 'ground', label: 'piso', color: '#5C9DC9' },
-  { key: 'items', label: 'dibujo', color: '#C9392E' },
-  { key: 'upload', label: 'raster 2D + subida', color: '#26283A' },
-  { key: 'gpuDraw', label: 'shader', color: '#7a5aa6' },
+  { key: 'ground', label: 'piso CPU', color: '#5C9DC9' },
+  { key: 'items', label: 'ítems CPU', color: '#C9392E' },
+  { key: 'raster', label: 'separaciones CPU', color: '#26283A' },
+  { key: 'draw', label: 'shader CPU', color: '#7a5aa6' },
 ];
 
 const N = 180;
 
 /**
  * Panel de medición (se abre con ?debug): cuánto cuesta cada paso del cuadro. Los tiempos de
- * CPU salen de performance.now(); los de GPU, de EXT_disjoint_timer_query_webgl2 si el
- * navegador lo ofrece, y si no, esperando a la GPU con una lectura de un píxel.
- * Ojo: con lienzo 2D acelerado, parte del dibujo se ejecuta recién al subirlo a la GPU.
+ * CPU salen de performance.now(); los de GPU, de EXT_disjoint_timer_query_webgl2.
+ * Sin la extensión, la espera con una lectura de un píxel mide la impresión completa.
+ * El gráfico apila solo CPU: las consultas de GPU llegan después y son otro reloj.
  */
 export class DebugPanel {
   readonly el = document.createElement('aside');
@@ -46,18 +46,19 @@ export class DebugPanel {
     this.graph.width = N;
     this.graph.height = 70;
     this.graph.style.cssText = `width:${N * 1.5}px;height:105px;display:block;image-rendering:pixelated`;
-    this.el.append(this.text, this.graph, this.legend());
+    this.el.append(this.text, this.graph, this.legend(stage));
     document.body.append(this.el);
     this.frameBox.style.cssText = 'position:fixed;z-index:49;pointer-events:none;border:1px dashed rgba(201,57,46,.7)';
     document.body.append(this.frameBox);
   }
 
-  private legend(): HTMLElement {
+  private legend(stage: Stage): HTMLElement {
     const l = document.createElement('div');
     l.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px 8px;margin-top:4px';
     for (const p of PARTS) {
       const s = document.createElement('span');
-      s.innerHTML = `<i style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:3px"></i>${p.label}`;
+      const label = p.key === 'raster' ? (stage.raster === 'webgl2' ? 'envío separaciones CPU' : 'raster 2D + subida CPU') : p.label;
+      s.innerHTML = `<i style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:3px"></i>${label}`;
       l.append(s);
     }
     return l;
@@ -67,8 +68,7 @@ export class DebugPanel {
     const i = this.head;
     this.head = (this.head + 1) % N;
     for (let k = 0; k < PARTS.length; k++) {
-      let v = s[PARTS[k].key] as number;
-      if (PARTS[k].key === 'gpuDraw') v = s.drawn ? Math.max(0, s.gpuDraw >= 0 ? s.gpuDraw : s.sync) : 0;
+      const v = s[PARTS[k].key] as number;
       this.hist[i * PARTS.length + k] = v;
       // Promedio solo sobre los cuadros que dibujaron (los demás no cuestan nada).
       if (s.drawn || PARTS[k].key === 'update' || PARTS[k].key === 'tick') {
@@ -76,7 +76,11 @@ export class DebugPanel {
         this.avg[PARTS[k].key] = a + (v - a) * 0.08;
       }
     }
-    if (s.drawn) this.avg.draw = (this.avg.draw ?? s.draw) + (s.draw - (this.avg.draw ?? s.draw)) * 0.08;
+    for (const key of ['gpuRaster', 'gpuDraw', 'sync'] as const) {
+      if (!s.drawn || s[key] < 0) continue;
+      const a = this.avg[key] ?? s[key];
+      this.avg[key] = a + (s[key] - a) * 0.08;
+    }
     this.drawn[i] = s.drawn ? 1 : 0;
     this.frames++;
     if (s.drawn) this.draws++;
@@ -97,18 +101,26 @@ export class DebugPanel {
     const f = (v: number | undefined) => (v === undefined ? '  –  ' : v.toFixed(2).padStart(5));
     const p = stage.printer;
     const dprOut = stage.canvas.width / Math.max(1, stage.view.w);
-    const gpu = s.gpuDraw >= 0 ? `shader GPU  ${f(a.gpuDraw)} ms   subida GPU ${f(s.gpuUpload)}` : s.sync >= 0 ? `subida+shader (esperando GPU) ${f(a.gpuDraw)} ms` : 'shader GPU   sin medición';
-    const total = (a.update ?? 0) + (a.tick ?? 0) + (a.ground ?? 0) + (a.items ?? 0) + (a.upload ?? 0) + (a.draw ?? 0);
+    const gpuRasterLabel = stage.raster === 'webgl2' ? 'raster + resolve GPU' : 'subida GPU';
+    const gpu = a.gpuDraw !== undefined
+      ? `${gpuRasterLabel} ${f(a.gpuRaster)} ms\nshader GPU       ${f(a.gpuDraw)} ms`
+      : a.sync !== undefined
+        ? `separaciones + shader (espera) ${f(a.sync)} ms`
+        : 'GPU              sin medición';
+    const total = (a.update ?? 0) + (a.tick ?? 0) + (a.ground ?? 0) + (a.items ?? 0) + (a.raster ?? 0) + (a.draw ?? 0);
+    const raster = stage.raster === 'webgl2'
+      ? `envío + resolve  ${f(a.raster)} ms CPU`
+      : `raster 2D+subida ${f(a.raster)} ms CPU`;
     this.text.textContent = [
-      `TRAMA · debug          calidad q${stage.quality}`,
+      `TRAMA · debug · ${stage.raster} · q${stage.quality}`,
       `${this.fps.toFixed(0).padStart(3)} cuadros/s · ${this.drawsPerS.toFixed(0).padStart(2)} impresos/s`,
       `mundo + cámara   ${f(a.update)} ms`,
-      `grabación        ${f(a.tick)} ms  (al animar)`,
-      `piso             ${f(a.ground)} ms  ${s.cached ? 'caché' : 'redibujo'}`,
-      `dibujo           ${f(a.items)} ms  ${s.ops} ops`,
-      `raster 2D+subida ${f(a.upload)} ms  (el lienzo 2D se pinta al subirlo)`,
+      `grabación        ${f(a.tick)} ms  ${stage.raster === 'webgl2' ? '(incluye subida de mallas)' : '(al animar)'}`,
+      `piso CPU         ${f(a.ground)} ms  ${stage.raster === 'webgl2' ? 'cola de mallas' : s.cached ? 'caché' : 'redibujo'}`,
+      `ítems CPU        ${f(a.items)} ms  ${s.ops} ops`,
+      raster,
       `shader (CPU)     ${f(a.draw)} ms`,
-      `CPU por cuadro   ${f(total)} ms`,
+      `CPU (prom. por etapa) ${f(total)} ms`,
       gpu,
       `lienzo  ${stage.canvas.width}×${stage.canvas.height} (×${dprOut.toFixed(2)})`,
       `separ.  ${Math.round(stage.view.w * stage.sepScale)}×${Math.round(stage.view.h * stage.sepScale)} (×${stage.sepScale.toFixed(2)})`,

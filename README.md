@@ -24,7 +24,7 @@ Abre en `http://localhost:5178`. Para el build estático (se sube a cualquier ho
 pnpm build
 ```
 
-El build completo pesa **~50 KB comprimido**: anda en netbooks escolares y con mala conexión.
+La obra no descarga imágenes ni fuentes externas. WebGL2 sigue siendo requisito.
 
 ## Cómo se recorre
 
@@ -43,9 +43,9 @@ En escritorio el texto ocupa una columna fija a la izquierda (35 % del ancho); e
 
 ## Modo `?debug`
 
-Abrir con `?debug` (por ejemplo `http://localhost:5178/?debug`) muestra un panel con lo que cuesta cada paso del cuadro: mundo y cámara, grabación (cuadros de animación), piso, dibujo de las separaciones, rasterizado del lienzo 2D más la subida a la GPU, y el shader medido en la GPU (`EXT_disjoint_timer_query_webgl2`, o esperando a la GPU si el navegador no lo ofrece). Abajo, un gráfico apilado de los últimos 180 cuadros con líneas en 16,7 y 33 ms, y un recuadro punteado con el encuadre libre. `?q=0` … `?q=3` fija un escalón de calidad. El panel se descarga solo cuando se pide.
+Abrir con `?debug` (por ejemplo `http://localhost:5178/?debug`) muestra el rasterizador activo y los tiempos de CPU: mundo y cámara, grabación y subida de las mallas dinámicas, armado de las colas de piso e ítems, envío y resolve de las separaciones, y envío del shader riso. Las consultas `EXT_disjoint_timer_query_webgl2` miden aparte **raster + resolve GPU** y **shader GPU**; si no están disponibles, la lectura de un píxel espera a la GPU y mide las separaciones más el shader juntos. Abajo, un gráfico apila solo los tiempos de CPU de los últimos 180 cuadros, con líneas en 16,7 y 33 ms, y un recuadro punteado con el encuadre libre. `?q=0` … `?q=3` fija un escalón de calidad. El panel se descarga solo cuando se pide.
 
-Ojo al leerlo: Chrome pinta el lienzo 2D recién cuando se lo sube a la GPU, así que **«raster 2D + subida»** incluye el rasterizado de todas las formas. En las primeras mediciones es, lejos, lo más caro.
+El camino predeterminado rasteriza directo en WebGL2. `?raster=2d` conserva el camino anterior para comparar (por ejemplo `?debug&raster=2d&q=0`): **raster 2D + subida CPU** incluye el trabajo que Chrome difiere hasta subir los lienzos, y **subida GPU** mide esa etapa, sin atribuirla al shader. Los tiempos de GPU y CPU son mediciones distintas y no se suman en el gráfico.
 
 ## Modo `?bench`
 
@@ -53,10 +53,10 @@ Ojo al leerlo: Chrome pinta el lienzo 2D recién cuando se lo sube a la GPU, as�
 
 - **Tramos**: lejos (portada de la escena), cerca (estrofa 224) y atardecer (estrofa 230); en cada uno, cámara quieta, paneo y zoom de lejos a cerca y de vuelta. Las filas «todo quieto / paneo / zoom» juntan los casos.
 - **Reproducible**: la cámara va por un riel (`stage.rail`), el mundo avanza con un paso fijo de 1/60 s, la prensa ya pasó, el atardecer ya cayó y la calidad queda fija en `q0` (o la de `?q=`).
-- **Dos pasadas**: *fluido* mide los cuadros reales (cuadros por segundo, porcentaje de cuadros de más de 20 ms) y los tiempos de CPU; *desglose* espera a la GPU después de cada impresión y da **«impresión+GPU»**: piso + dibujo + rasterizado del lienzo 2D + subida + shader, lo que de otro modo queda escondido en la GPU. La columna **shader GPU** aparece si el navegador ofrece `EXT_disjoint_timer_query_webgl2`.
+- **Dos pasadas**: *fluido* mide los cuadros reales (cuadros por segundo, porcentaje de cuadros de más de 20 ms) y los tiempos de CPU; *desglose* espera a la GPU después de cada impresión y da **«impresión+GPU»**: armado de piso e ítems + separaciones + shader hasta completar la espera. **raster+resolve GPU** y **shader GPU** aparecen si el navegador ofrece `EXT_disjoint_timer_query_webgl2`; en modo 2D la primera se llama **subida GPU**. La grabación y subida de mallas se mide aparte, en los cuadros de animación.
 - `?bench=manual` avanza sin `requestAnimationFrame` (por ejemplo, con la pestaña oculta) y hace solo el desglose. Desde la consola: `await trama.medir({ manual: true })`.
 
-Para comparar antes y después conviene la misma ventana (la tabla anota vista, dpr, GPU y tamaño de las separaciones).
+Para comparar, usar `?bench&q=0` y `?bench&raster=2d&q=0` con la misma ventana. La tabla anota rasterizador, vista, dpr, GPU y tamaño de las separaciones. Los tiempos del rasterizador nuevo se deben medir en el equipo real; el build y las capturas no prueban una mejora de rendimiento.
 
 ## La escena: Canto VIII, estrofas 222–230
 
@@ -91,7 +91,7 @@ Los verdes del pasto son ocre sobre celeste; los naranjas, punzó sobre ocre; lo
 
 ## Cómo funciona la impresión
 
-1. **Separaciones.** Todo se dibuja en dos lienzos 2D que no guardan colores sino *densidades de tinta*: uno lleva punzó, ocre y celeste en sus canales R, G, B y el otro la tinta de línea. Cada forma elige un modo: *calar* (knock-out: tapa lo de abajo), *sobreimprimir* (máximo), *sumar* (las luces) o *quitar* (la luz que disuelve la sombra).
+1. **Separaciones.** Las formas se graban como triángulos en px de mundo y ejes de trazo como segmentos. WebGL2 dibuja las dos separaciones a la vez en un framebuffer con dos destinos: uno lleva las densidades de punzó, ocre y celeste en R, G, B; el otro lleva la tinta clave en R y la máscara de línea en G. No se rasterizan lienzos 2D ni se suben como texturas. Cada forma elige un modo: *calar* (knock-out: tapa lo de abajo y borra la máscara donde no hay línea), *sobreimprimir* (máximo), *sumar* (las luces) o *quitar* (la luz que disuelve la sombra). En *sobreimprimir* con alfa menor que uno se aproxima Canvas con el máximo de las densidades multiplicadas por alfa. El antialiasing usa MSAA cuando está disponible y resuelve cada destino a su textura. El camino `?raster=2d` mantiene los lienzos y `Path2D` de referencia.
 2. **Trama.** Un shader WebGL2 lee las separaciones y trama cada tinta por separado: celda de puntos con su ángulo propio, puntos con un leve temblor, fallas de tinta en los plenos, carga desigual del tambor, y un desregistro distinto por tinta. Las tintas se multiplican sobre el papel crema con grano. La trama está anclada al mundo: al acercarte, los puntos crecen como bajo una lupa. De lejos, cuando la celda mide menos de 3 a 4 px de dispositivo, los puntos se funden en tono parejo (como ve el ojo una lámina a distancia), y el grano del papel y los poros se eligen por octavas según el zoom para no chisporrotear.
 3. **Líneas plenas.** Los trazos y contornos de tinta clave marcan además una máscara de línea (el canal G de la segunda separación) que se imprime sin trama, y ningún trazo queda más fino que 1 px de pantalla: de lejos las líneas no se cortan en puntitos.
 4. **La luz es tinta.** Candiles, vela y fogón son anillos escalonados que suman ocre y quitan sombra. El atardecer es una tinta más que cae en cuatro escalones.
@@ -100,7 +100,7 @@ Los verdes del pasto son ocre sobre celeste; los naranjas, punzó sobre ocre; lo
 
 ## Cómo funciona el motor (Trama)
 
-- **Una escena por vez.** A diferencia del pliego con todas las escenas juntas, Trama carga y anima una sola. Lo fijo se graba una vez; el piso y las paredes se guardan en caché cuando la cámara está quieta; lo que se mueve se vuelve a grabar a 15 cuadros por segundo (animación "en dos") mientras la cámara se mueve a 60. Si la vista no cambió y no tocaba cuadro de animación, no se vuelve a imprimir. Si el equipo no llega, baja sola la resolución del shader y después los cuadros de animación (15, 12, 10, 8); la de las separaciones nunca, porque eso borronea la lámina y corta las líneas.
+- **Una escena por vez.** A diferencia del pliego con todas las escenas juntas, Trama carga y anima una sola. Lo fijo se graba y se sube una vez por cada una de las tres variantes de temblor; lo que se mueve se vuelve a grabar y subir a 15 cuadros por segundo (animación "en dos") mientras la cámara se mueve a 60. Cada impresión recorre las mallas en orden, saltea los ítems fuera de la vista y agrupa rangos consecutivos con la misma mezcla. El rasterizador WebGL2 reutiliza los buffers, sin caché de imágenes del piso; el modo 2D conserva esa caché. Si la vista no cambió y no tocaba cuadro de animación, no se vuelve a imprimir. Si el equipo no llega, baja sola la resolución del shader y después los cuadros de animación (15, 12, 10, 8); la de las separaciones nunca, porque eso borronea la lámina y corta las líneas.
 - **Figuras.** Un esqueleto de perfil compartido (pelvis, columna, cuello, cabeza, brazos y piernas) con clips de pose: caminar, correr, sentarse, tomar mate, cebar, tocar la guitarra, jugar al truco, acodarse en el mostrador, servir, limpiar, empujar, trastabillar, pelear, tirarse a fondo, caer, yacer, dormir, gritar, saludar… Sobre el esqueleto van volúmenes con sombra y la ropa de época: chiripá, calzoncillo cribado, botas de potro, faja, tirador con monedas, poncho con guarda, chambergo, vincha, boina, pollera, rebozo, delantal. De cerca aparecen ojos, cejas, nariz, bigote y barba.
 - **Cuadrúpedos.** Caballos criollos (oscuro, tordillo, zaino) con recado, riendas atadas al palenque y jinete; perro. Paso de cuatro tiempos y trote diagonal.
 - **Actores con tareas.** Cada actor tiene una cola de tareas (`go`, `play`, `call`) y un "cerebro" que genera la próxima tanda cuando se termina: así nadie se queda quieto. El relato reemplaza tareas y cerebros en cada momento; si se salta de golpe, acomoda a todos sin animar.
@@ -114,7 +114,7 @@ Los verdes del pasto son ocre sobre celeste; los naranjas, punzó sobre ocre; lo
 
 ## Próximos pasos
 
-- Rendimiento, guiado por `?debug`: el costo mayor es rasterizar ~1.500 formas en los lienzos 2D en cada impresión. Siguen el nivel de detalle por zoom (figuras simplificadas, menos temblor, pasto quieto y pasado al fondo, animación a 8 cuadros por segundo), el piso cacheado como imagen del mundo en varias resoluciones, no dibujar lo que está fuera de cuadro y, más adelante, un worker o dibujo directo en GPU.
+- Rendimiento, guiado por `?debug` y la comparación A/B de `?bench` en notebooks reales. Siguen el nivel de detalle por zoom (figuras simplificadas, menos temblor, pasto quieto y pasado al fondo), mejoras del armado de las mallas dinámicas y, más adelante, un worker.
 - Más trabajo sobre los caballos (cabeza, rodillas, galope) y montar/desmontar animados.
 - Guía docente y notas al pie del texto (léxico gauchesco, contexto histórico). El Canto VII, con insultos racistas explícitos, necesita un marco pedagógico antes de ilustrarse.
 - Resto de *La Ida* (13 cantos) y *La Vuelta*.
