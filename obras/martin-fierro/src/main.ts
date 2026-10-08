@@ -173,9 +173,25 @@ stage.bake();
 let actual = -1;
 let beatActual = -1;
 
+/**
+ * Alto de referencia: cambia solo con el ancho (al rotar), no cuando la barra del navegador
+ * aparece o se va al desplazarse. Así la franja no salta.
+ */
+let altoFijo = window.innerHeight;
+
+/** Muescas y barras del sistema (env(safe-area-inset-*)), en px. */
+const sonda = el('div');
+sonda.style.cssText =
+  'position:fixed;inset:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+document.body.append(sonda);
+function seguro(): { t: number; r: number; b: number; l: number } {
+  const s = getComputedStyle(sonda);
+  return { t: parseFloat(s.paddingTop) || 0, r: parseFloat(s.paddingRight) || 0, b: parseFloat(s.paddingBottom) || 0, l: parseFloat(s.paddingLeft) || 0 };
+}
+
 /** Alto de la franja de papel (celular): entra la estrofa más larga; la intro y el cierre piden más. */
 function franja(t: Tipo): number {
-  const h = window.innerHeight;
+  const h = altoFijo;
   const lista = t === 'estrofa' ? estrofas : pasos.filter((p) => p.tipo === (t === 'portada' ? 'intro' : t));
   let need = 0;
   for (const p of lista) if (p.hoja) need = Math.max(need, p.hoja.scrollHeight);
@@ -190,22 +206,31 @@ function layout(): void {
   const t = pasos[actual]?.tipo ?? 'portada';
   const sinTexto = document.body.classList.contains('sin-texto') && t !== 'portada';
   stage.feather = enColumna.matches ? 64 : 40;
+  // El encuadre no se mete debajo de la muesca ni de la barra de inicio.
+  const s = seguro();
+  const x0 = Math.max(0.02, (s.l + 8) / w);
+  const x1 = Math.min(0.98, 1 - (s.r + 8) / w);
   if (sinTexto) {
     stage.plate = { x0: -1, y0: -1, x1: 2, y1: 2 };
-    stage.frame = { x0: 0.02, y0: 0.03, x1: 0.98, y1: 0.97 };
+    stage.frame = { x0, y0: Math.max(0.03, (s.t + 8) / h), x1, y1: Math.min(0.97, 1 - (s.b + 8) / h) };
     return;
   }
   if (enColumna.matches) {
     document.body.style.removeProperty('--franja');
     const borde = columna.getBoundingClientRect().right;
     stage.plate = { x0: borde / w, y0: -1, x1: 2, y1: 2 };
-    stage.frame = { x0: (borde + stage.feather * 0.5) / w, y0: 0.04, x1: 0.985, y1: 0.96 };
+    stage.frame = {
+      x0: (borde + stage.feather * 0.5) / w,
+      y0: Math.max(0.04, (s.t + 8) / h),
+      x1: Math.min(0.985, 1 - (s.r + 8) / w),
+      y1: Math.min(0.96, 1 - (s.b + 8) / h),
+    };
   } else {
     const f = franja(t);
     document.body.style.setProperty('--franja', `${f}px`);
     const top = h - f;
     stage.plate = { x0: -1, y0: -1, x1: 2, y1: top / h };
-    stage.frame = { x0: 0.02, y0: 0.015, x1: 0.98, y1: (top - stage.feather * 0.5) / h };
+    stage.frame = { x0, y0: Math.max(0.015, (s.t + 4) / h), x1, y1: (top - stage.feather * 0.5) / h };
   }
   desborde();
 }
@@ -224,6 +249,7 @@ function medidas(): void {
   // Los pasos se miden en px fijos: en el celular la barra del navegador cambia el alto al desplazarse.
   if (window.innerWidth !== anchoPrevio || !anchoPrevio) {
     anchoPrevio = window.innerWidth;
+    altoFijo = window.innerHeight;
     document.documentElement.style.setProperty('--alto', `${window.innerHeight}px`);
   }
   layout();
