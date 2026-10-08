@@ -179,7 +179,8 @@ function franja(t: Tipo): number {
   const lista = t === 'estrofa' ? estrofas : pasos.filter((p) => p.tipo === (t === 'portada' ? 'intro' : t));
   let need = 0;
   for (const p of lista) if (p.hoja) need = Math.max(need, p.hoja.scrollHeight);
-  const cromo = 76;
+  // Folio, márgenes y lo que crece el folio en táctil (--folio, en el CSS).
+  const cromo = 76 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--folio')) || 0);
   return Math.round(clamp(need + cromo, h * 0.3, h * (t === 'estrofa' ? 0.52 : 0.74)));
 }
 

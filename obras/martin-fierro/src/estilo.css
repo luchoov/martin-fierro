@@ -13,6 +13,7 @@
   --franja: 44vh;
   --lado: 16px;
   --pie: max(10px, env(safe-area-inset-bottom));
+  --folio: 0px;
   --verso: clamp(1.04rem, 0.6rem + 1.2vw, 1.3rem);
   --interlinea: 1.44;
 }
@@ -31,6 +32,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Sin zoom ni rebote de página: el pellizco y el doble toque son de la lámina. */
+html {
+  overscroll-behavior: none;
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 #lamina {
   position: fixed;
   inset: 0;
@@ -41,6 +51,8 @@ body {
   touch-action: pan-y;
   cursor: grab;
   background: var(--papel);
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 /* ——— El relato: pasos invisibles que marcan el ritmo del scroll ——— */
@@ -172,8 +184,8 @@ body.sin-texto #columna {
   position: fixed;
   left: var(--lado);
   right: var(--lado);
-  bottom: calc(var(--pie) + 2.3rem);
-  max-height: calc(var(--franja) - 3.4rem);
+  bottom: calc(var(--pie) + 2.3rem + var(--folio));
+  max-height: calc(var(--franja) - 3.4rem - var(--folio));
   overflow: auto;
   scrollbar-width: thin;
   opacity: 0;
@@ -685,7 +697,7 @@ kbd {
     right: auto;
     width: calc(var(--col) - var(--lado) - 28px);
     bottom: auto;
-    max-height: calc(100vh - 2 * var(--vert) - 5.4rem);
+    max-height: calc(100vh - 2 * var(--vert) - 5.4rem - 2 * var(--folio));
   }
 
   /* Todas las estrofas empiezan a la misma altura: la de ocho versos queda centrada. */
@@ -738,7 +750,7 @@ kbd {
   .hoja-intro,
   .hoja-cierre {
     top: calc(var(--vert) + 0.3rem);
-    bottom: calc(var(--vert) + 3.6rem);
+    bottom: calc(var(--vert) + 4.4rem);
     max-height: none;
     transform: none;
   }
@@ -791,6 +803,41 @@ kbd {
 
   .tapa-seguir {
     margin-top: 0.8rem !important;
+  }
+}
+
+/* ——— Táctil: zonas de toque de 44 px sin engordar el dibujo ——— */
+
+@media (pointer: coarse) {
+  :root {
+    /* Lo que crece el folio al pasar las marcas a su propio renglón. */
+    --folio: 27px;
+  }
+
+  .ayuda::after,
+  .entendido::after,
+  .volver::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+
+  .entendido,
+  .volver {
+    position: relative;
+  }
+
+  .marcas {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .marca {
+    flex: 1 1 0;
+    max-width: 44px;
+    height: 44px;
+    margin-block: -10px;
   }
 }
 
