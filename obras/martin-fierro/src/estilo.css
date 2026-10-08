@@ -763,10 +763,6 @@ kbd {
     font-size: 1rem;
   }
 
-  .nota {
-    width: min(19rem, 44vw);
-  }
-
   .paso-portada {
     padding: 10px var(--der) 10px var(--izq);
   }
