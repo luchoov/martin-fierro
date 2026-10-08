@@ -64,6 +64,8 @@ export class Drawer {
     this.ops = [];
     this.mesh.reset();
     this.b = [Infinity, Infinity, -Infinity, -Infinity];
+    // Las figuras cambian el paso del temblor: cada grabación empieza igual, se grabe lo que se grabe antes.
+    this.step = 7;
     this.reseed(seed);
     this.v = variant;
     this.lod = lod;
@@ -127,7 +129,6 @@ export class Drawer {
    */
   push(m: Mode, pts: Pts, ink: Ink, smooth = true, line = false, axis?: Pts, width = 0, shape: Shape = Shape.Fill, inner?: Pts): void {
     if (pts.length < 6) return;
-    this.grow(pts);
     const mesh = this.mesh;
     let op = this.ops[this.ops.length - 1];
     if (!(op && op.m === m && op.i === ink && op.a === this.alpha && op.l === line && (m === Mode.Fill || m === Mode.Over) && this.alpha === 1)) {
@@ -147,7 +148,7 @@ export class Drawer {
   /**
    * Contornos juntados en una operación: si uno pisa a otro con la orientación contraria, el
    * lienzo 2D (regla distinta de cero) dejaba sin pintar lo que se superpone. Esa operación
-   * se imprime contando vueltas, para que quede igual.
+   * se imprime contando vueltas, para que quede igual. De paso agranda los límites de lo grabado.
    */
   private overlaps(pts: Pts): boolean {
     let a = 0;
@@ -158,12 +159,19 @@ export class Drawer {
     const n = pts.length >> 1;
     for (let i = 0; i < n; i++) {
       const j = i + 1 < n ? i + 1 : 0;
-      a += pts[2 * i] * pts[2 * j + 1] - pts[2 * j] * pts[2 * i + 1];
-      x0 = Math.min(x0, pts[2 * i]);
-      x1 = Math.max(x1, pts[2 * i]);
-      y0 = Math.min(y0, pts[2 * i + 1]);
-      y1 = Math.max(y1, pts[2 * i + 1]);
+      const x = pts[2 * i];
+      const y = pts[2 * i + 1];
+      a += x * pts[2 * j + 1] - pts[2 * j] * y;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
     }
+    const b = this.b;
+    if (x0 < b[0]) b[0] = x0;
+    if (y0 < b[1]) b[1] = y0;
+    if (x1 > b[2]) b[2] = x1;
+    if (y1 > b[3]) b[3] = y1;
     const sg = a >= 0 ? 1 : -1;
     const S = this.subs;
     let hit = false;

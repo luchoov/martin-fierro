@@ -6,6 +6,8 @@ export type Vec3 = [number, number, number];
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const clamp = (v: number, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 export const smooth = (t: number) => t * t * (3 - 2 * t);
+/** Largo de un vector (Math.hypot es varias veces más lento en V8 y acá no hace falta su precisión). */
+export const len = (x: number, y: number) => Math.sqrt(x * x + y * y);
 export const smoothstep = (a: number, b: number, x: number) => smooth(clamp((x - a) / (b - a)));
 
 export function easeInOut(t: number): number {

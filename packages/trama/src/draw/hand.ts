@@ -1,3 +1,4 @@
+import { len } from '../core/math';
 import { vnoise1 } from '../core/rng';
 
 /** Puntos planos [x0, y0, x1, y1, ...] en px de mundo. */
@@ -20,7 +21,7 @@ export function wobble(src: Pts, closed: boolean, amp: number, seed: number, ste
     const j = (i + 1) % n;
     const dx = src[2 * j] - ax;
     const dy = src[2 * j + 1] - ay;
-    const L = Math.hypot(dx, dy) || 1e-6;
+    const L = len(dx, dy) || 1e-6;
     nx = -dy / L;
     ny = dx / L;
     const k = Math.max(1, Math.ceil(L / step));
@@ -71,7 +72,7 @@ export function strokePoly(c: Pts, w0: number, w1: number, t0: number, t1: numbe
   const n = c.length >> 1;
   if (n < 2) return [];
   const acc = new Float64Array(n);
-  for (let i = 1; i < n; i++) acc[i] = acc[i - 1] + Math.hypot(c[2 * i] - c[2 * i - 2], c[2 * i + 1] - c[2 * i - 1]);
+  for (let i = 1; i < n; i++) acc[i] = acc[i - 1] + len(c[2 * i] - c[2 * i - 2], c[2 * i + 1] - c[2 * i - 1]);
   const L = acc[n - 1] || 1e-6;
   const left: Pts = [];
   const right: Pts = [];
@@ -80,7 +81,7 @@ export function strokePoly(c: Pts, w0: number, w1: number, t0: number, t1: numbe
     const i1 = Math.min(n - 1, i + 1);
     let tx = c[2 * i1] - c[2 * i0];
     let ty = c[2 * i1 + 1] - c[2 * i0 + 1];
-    const tl = Math.hypot(tx, ty) || 1;
+    const tl = len(tx, ty) || 1;
     tx /= tl;
     ty /= tl;
     const t = acc[i] / L;
@@ -115,8 +116,8 @@ export function offsetPoly(p: Pts, w: number, seed: number, jit = 0.45): Pts {
     let ay = p[2 * i + 1] - p[2 * h + 1];
     let bx = p[2 * j] - p[2 * i];
     let by = p[2 * j + 1] - p[2 * i + 1];
-    const la = Math.hypot(ax, ay) || 1;
-    const lb = Math.hypot(bx, by) || 1;
+    const la = len(ax, ay) || 1;
+    const lb = len(bx, by) || 1;
     ax /= la;
     ay /= la;
     bx /= lb;
@@ -127,7 +128,7 @@ export function offsetPoly(p: Pts, w: number, seed: number, jit = 0.45): Pts {
     const n2y = -bx * sg;
     let mx = n1x + n2x;
     let my = n1y + n2y;
-    const ml = Math.hypot(mx, my);
+    const ml = len(mx, my);
     if (ml < 1e-6) {
       mx = n1x;
       my = n1y;
@@ -195,7 +196,7 @@ export function limbPoly(c: Pts, w: number[], cap0 = true, cap1 = true): Pts {
     const i1 = Math.min(n - 1, i + 1);
     let tx = c[2 * i1] - c[2 * i0];
     let ty = c[2 * i1 + 1] - c[2 * i0 + 1];
-    const tl = Math.hypot(tx, ty) || 1;
+    const tl = len(tx, ty) || 1;
     tx /= tl;
     ty /= tl;
     const nx = -ty;

@@ -1,4 +1,4 @@
-import { iso, groundRadii } from '../core/iso';
+import { iso, isoX, isoY, groundRadii } from '../core/iso';
 import { Rng } from '../core/rng';
 import type { Vec2 } from '../core/math';
 import { Drawer } from '../draw/drawer';
@@ -22,6 +22,10 @@ export interface Item {
   slot?: number;
   ops(w: World): Recording;
   record?(d: Drawer, w: World): void;
+  /** Pie y altura cuando se grabó (lo grabado se corre con la pieza hasta la próxima vez). */
+  at?: number[];
+  /** Quedó fuera de lo que cubre la cámara: no se grabó ni se imprime. */
+  culled?: boolean;
   onClick?: (w: World, at: Vec2) => void;
 }
 
@@ -159,6 +163,8 @@ export class World {
   duskTarget = 0;
   duskInk = Ink.of(0.05, 0, 0.32, 0.2);
   sorted: Item[] = [];
+  /** Lo que cubre la cámara (px de mundo, x0 y0 x1 y1): lo que se mueve fuera de acá no se graba. */
+  cover = [-Infinity, -Infinity, Infinity, Infinity];
   private groundFns: { fn: DrawFn; seed: number }[] = [];
   private groundRecs: Recording[] = [];
   private overlayFns: DrawFn[] = [];
@@ -255,7 +261,7 @@ export class World {
   /** Lo que se volvió a grabar en este cuadro de animación. */
   dynamicLayers(): Layer[] {
     const out: Layer[] = [];
-    for (const it of this.items) if (it.record && it.visible && !it.carried) out.push({ rec: it.ops(this), slot: it.slot! });
+    for (const it of this.items) if (it.record && it.visible && !it.carried && !it.culled) out.push({ rec: it.ops(this), slot: it.slot! });
     return out;
   }
 
@@ -270,7 +276,7 @@ export class World {
   /** Orden de impresión: piso, piezas de atrás hacia adelante y lo de encima, con sus operaciones. */
   printOrder(): { slot: number; ops: number }[] {
     const out = [{ slot: 0, ops: (this.groundRecs[this.variant] ?? EMPTY).ops.length }];
-    for (const it of this.sorted) out.push({ slot: it.slot!, ops: it.ops(this).ops.length });
+    for (const it of this.sorted) out.push({ slot: it.slot!, ops: it.culled ? 0 : it.ops(this).ops.length });
     out.push({ slot: this.topSlot, ops: this.overlayRec.ops.length + this.lightRec.ops.length });
     return out;
   }
@@ -316,7 +322,16 @@ export class World {
 
   /** Cuadro de animación: graba lo que se mueve y reordena por profundidad. */
   tick(d: Drawer): void {
-    for (const it of this.items) if (it.record && it.visible && !it.carried) it.record(d, this);
+    for (const it of this.items) {
+      if (!(it.record && it.visible && !it.carried)) continue;
+      it.culled = !this.covers(it);
+      if (it.culled) continue;
+      it.record(d, this);
+      const at = (it.at ??= [0, 0, 0]);
+      at[0] = it.fx0;
+      at[1] = it.fy0;
+      at[2] = it.z0;
+    }
     d.begin(4242, this.variant, this.zoom);
     for (const fn of this.overlayFns) fn(d, this);
     this.drawParticles(d);
@@ -325,6 +340,18 @@ export class World {
     this.drawLights(d);
     this.lightRec = d.take();
     this.sort();
+  }
+
+  /** Si lo último que grabó la pieza, corrido hasta donde está ahora, cae dentro de cover. */
+  private covers(it: Item): boolean {
+    const b = it.b;
+    const a = it.at;
+    // Sin grabar todavía, o sin nada grabado (puede aparecer en cualquier momento).
+    if (!a || !(b[0] <= b[2])) return true;
+    const dx = isoX(it.fx0, it.fy0) - isoX(a[0], a[1]);
+    const dy = isoY(it.fx0, it.fy0, it.z0) - isoY(a[0], a[1], a[2]);
+    const c = this.cover;
+    return b[0] + dx < c[2] && b[2] + dx > c[0] && b[1] + dy < c[3] && b[3] + dy > c[1];
   }
 
   private drawParticles(d: Drawer): void {
