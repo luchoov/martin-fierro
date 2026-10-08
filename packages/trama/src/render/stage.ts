@@ -38,25 +38,28 @@ export interface Rect {
   y1: number;
 }
 
-/** Lo que costó cada paso del último cuadro (ms). */
+/** Lo que costó cada paso del último cuadro (ms). gpu* y sync = -1 si no hay medición. */
 export interface FrameStats {
   /** Intervalo entre cuadros. */
   dt: number;
   update: number;
   /** Grabación de lo que se mueve (0 si en este cuadro no tocaba). */
   tick: number;
+  /** Armado y subida de los triángulos de lo que se mueve (con la grabación). */
+  pack: number;
   /** Si en este cuadro tocaba grabar (cuadro de animación). */
   ticked: boolean;
-  ground: number;
-  items: number;
-  upload: number;
+  /** Encargar las separaciones a la GPU (CPU). */
+  sep: number;
+  /** Encargar el shader de trama (CPU). */
   draw: number;
-  gpuUpload: number;
+  gpuSep: number;
   gpuDraw: number;
+  /** Impresión entera esperando a la GPU (?bench, o ?debug sin consulta de tiempos). */
   sync: number;
   drawn: boolean;
-  cached: boolean;
   ops: number;
+  verts: number;
 }
 
 /**
@@ -93,13 +96,12 @@ export class Stage {
   resumeAfter = 14;
   onFrame?: (dt: number) => void;
   onSettle?: () => void;
-  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, ticked: false, ground: 0, items: 0, upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1, drawn: false, cached: false, ops: 0 };
+  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, pack: 0, ticked: false, sep: 0, draw: 0, gpuSep: -1, gpuDraw: -1, sync: -1, drawn: false, ops: 0, verts: 0 };
   /** Panel de medición (?debug), si hay uno. */
   debug?: { frame(s: FrameStats, stage: Stage): void };
   /** Recorrido fijo de cámara (benchmark): x, y en px de mundo y zoom. Reemplaza al encuadre y a la entrada. */
   rail?: (dt: number) => [number, number, number];
-  private sep = new Separation();
-  private caches: { sep: Separation; key: string }[] = [];
+  private sep: Separation;
   private drawer = new Drawer();
   private shotSrc: Shot | (() => Shot) | null = null;
   private freeT = 0;
@@ -123,12 +125,12 @@ export class Stage {
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.printer = new RisoPrinter(canvas, opts.inks);
+    this.sep = new Separation(this.printer.gl);
     this.animFps = opts.animFps ?? 15;
     this.maxDpr = opts.maxDpr ?? 2;
     if (opts.reducedMotion) this.world.boilHz = 0;
     if (opts.autoPrint === false) this.pressDir = 0;
     this.fixedQ = opts.quality !== undefined;
-    for (let i = 0; i < 3; i++) this.caches.push({ sep: new Separation(), key: '' });
     new Input(canvas, this);
     const onResize = () => this.resize();
     window.addEventListener('resize', onResize);
@@ -141,7 +143,9 @@ export class Stage {
   /** Graba todo lo fijo. Llamar una vez que la escena está armada. */
   bake(): void {
     this.world.bake(this.drawer);
+    this.sep.setStatic(this.world.staticLayers());
     this.world.tick(this.drawer);
+    this.sep.setDynamic(this.world.dynamicLayers(), this.world.topLayers());
   }
 
   get anchor(): Vec2 {
@@ -152,6 +156,11 @@ export class Stage {
   /** Escalón de calidad actual (0 = el mejor). */
   get quality(): number {
     return this.q;
+  }
+
+  /** Muestras por píxel del suavizado de las separaciones. */
+  get samples(): number {
+    return this.sep.samples;
   }
 
   /** Resolución de las separaciones respecto de los px CSS: depende solo del equipo. */
@@ -294,7 +303,7 @@ export class Stage {
     const t1 = performance.now();
     st.update = t1 - t0;
 
-    st.tick = 0;
+    st.tick = st.pack = 0;
     let ticked = false;
     const fps = Math.min(this.animFps, LADDER[this.q].fps);
     this.tickAcc += dt;
@@ -302,7 +311,10 @@ export class Stage {
       this.tickAcc %= 1 / fps;
       this.world.tick(this.drawer);
       ticked = true;
-      st.tick = performance.now() - t1;
+      const t2 = performance.now();
+      st.tick = t2 - t1;
+      this.sep.setDynamic(this.world.dynamicLayers(), this.world.topLayers());
+      st.pack = performance.now() - t2;
     }
     st.ticked = ticked;
 
@@ -317,9 +329,9 @@ export class Stage {
     if (need) {
       this.viewKey = key;
       this.dirty = false;
-      this.draw(moving);
+      this.draw();
     } else {
-      st.ground = st.items = st.upload = st.draw = 0;
+      st.sep = st.draw = 0;
     }
     this.drewLast = need;
     this.debug?.frame(st, this);
@@ -369,40 +381,21 @@ export class Stage {
     } else this.slowT = Math.max(0, this.slowT - raw);
   }
 
-  private draw(moving: boolean): void {
+  private draw(): void {
     const st = this.stats;
     const dpr = Math.min(this.maxDpr, LADDER[this.q].dpr, window.devicePixelRatio || 1);
     const { w, h } = this.view;
     const c = this.camera;
     const [ax, ay] = this.anchor;
     const sep = this.sep;
+    const printer = this.printer;
     const t0 = performance.now();
     sep.resize(w, h, this.sepScale);
-    sep.clear();
-    sep.setView(c.x, c.y, c.z, ax, ay);
-    st.cached = !moving;
-    if (moving) {
-      this.world.renderGround(sep);
-    } else {
-      const cache = this.caches[this.world.variant];
-      const key = `${c.x.toFixed(2)}|${c.y.toFixed(2)}|${c.z.toFixed(4)}|${sep.w}x${sep.h}|${ax}|${ay}`;
-      if (cache.key !== key) {
-        cache.sep.resize(w, h, sep.scale);
-        cache.sep.clear();
-        cache.sep.setView(c.x, c.y, c.z, ax, ay);
-        this.world.renderGround(cache.sep);
-        cache.key = key;
-        st.cached = false;
-      }
-      sep.blit(cache.sep);
-    }
-    const t1 = performance.now();
-    this.world.render(sep);
-    const t2 = performance.now();
-    st.ground = t1 - t0;
-    st.items = t2 - t1;
+    printer.gpu('gpuSep', () => sep.draw(this.world.variant, this.world.printOrder(), c.x, c.y, c.z, ax, ay));
+    st.sep = performance.now() - t0;
     st.ops = sep.count;
-    this.printer.render(sep, {
+    st.verts = sep.verts;
+    printer.render(sep, {
       cssW: w,
       cssH: h,
       dpr,
@@ -414,11 +407,13 @@ export class Stage {
       plate: this.platePx ?? [-w, -h, 2 * w, 2 * h],
       feather: this.feather,
     });
-    const tm = this.printer.timing;
-    st.upload = tm.upload;
-    st.draw = tm.draw;
-    st.gpuUpload = tm.gpuUpload;
-    st.gpuDraw = tm.gpuDraw;
-    st.sync = tm.sync;
+    st.draw = printer.timing.draw;
+    st.gpuSep = printer.timing.gpuSep;
+    st.gpuDraw = printer.timing.gpuDraw;
+    st.sync = -1;
+    if (printer.wait || (printer.measure && !printer.canTime)) {
+      printer.finish();
+      st.sync = performance.now() - t0;
+    }
   }
 }

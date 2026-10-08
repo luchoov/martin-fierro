@@ -1,6 +1,6 @@
 import { clamp, smoothstep } from '../core/math';
 import { hexToRgb, type InkSet } from './ink';
-import type { Separation } from './separation';
+import { link, type Separation } from './separation';
 
 const VERT = `#version 300 es
 void main() {
@@ -155,24 +155,20 @@ export interface PrintView {
 
 /** Tiempos del último cuadro impreso (ms). gpu* = -1 si no hay medición. */
 export interface PrintTiming {
-  upload: number;
   draw: number;
-  gpuUpload: number;
+  gpuSep: number;
   gpuDraw: number;
-  /** Medición sincrónica (subida + shader esperando a la GPU), si no hay consulta de tiempos. */
-  sync: number;
 }
+
+type GpuKind = 'gpuSep' | 'gpuDraw';
 
 type TimerExt = { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number };
 
 export class RisoPrinter {
-  private gl: WebGL2RenderingContext;
+  readonly gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
-  private texA: WebGLTexture;
-  private texB: WebGLTexture;
+  private vao: WebGLVertexArrayObject;
   private u: Record<string, WebGLUniformLocation | null> = {};
-  private sizeA = '';
-  private sizeB = '';
   private inkRgb: number[] = [];
   private angles: number[] = [];
   private mis: number[] = [];
@@ -188,23 +184,21 @@ export class RisoPrinter {
   press: [number, number, number, number] = [1, 1, 1, 1];
   /** Medir tiempos de GPU (modo ?debug). */
   measure = false;
-  /** Esperar a la GPU después de cada impresión (benchmark): sync mide raster 2D + subida + shader. */
+  /** Esperar a la GPU después de cada impresión (benchmark): mide separaciones + shader enteros. */
   wait = false;
-  readonly timing: PrintTiming = { upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1 };
+  readonly timing: PrintTiming = { draw: 0, gpuSep: -1, gpuDraw: -1 };
   /** Celda (px de dispositivo) y mezcla puntos/tono del último cuadro. */
   cellDev = 0;
   screen = 1;
   private timer: TimerExt | null | undefined;
-  private queries: { q: WebGLQuery; kind: 'gpuUpload' | 'gpuDraw' }[] = [];
+  private queries: { q: WebGLQuery; kind: GpuKind }[] = [];
   private pixel = new Uint8Array(4);
 
   constructor(readonly canvas: HTMLCanvasElement, inks: InkSet) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
     if (!gl) throw new Error('Trama necesita WebGL2');
     this.gl = gl;
-    this.prog = this.link(VERT, FRAG);
-    this.texA = this.makeTex();
-    this.texB = this.makeTex();
+    this.prog = link(gl, VERT, FRAG);
     for (const name of ['uA', 'uB', 'uView', 'uDpr', 'uCam', 'uAnchor', 'uZoom', 'uCell', 'uScreen', 'uInk', 'uAng', 'uMis', 'uPaper', 'uPress', 'uPlate', 'uFeather', 'uSeed']) {
       this.u[name] = gl.getUniformLocation(this.prog, name);
     }
@@ -214,50 +208,7 @@ export class RisoPrinter {
       this.angles.push((ink.angle * Math.PI) / 180);
       this.mis.push(ink.misreg[0], ink.misreg[1]);
     }
-    gl.bindVertexArray(gl.createVertexArray());
-  }
-
-  private link(vs: string, fs: string): WebGLProgram {
-    const gl = this.gl;
-    const compile = (type: number, src: string) => {
-      const s = gl.createShader(type)!;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) ?? 'shader');
-      return s;
-    };
-    const p = gl.createProgram()!;
-    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
-    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) ?? 'link');
-    return p;
-  }
-
-  private makeTex(): WebGLTexture {
-    const gl = this.gl;
-    const t = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return t;
-  }
-
-  private upload(tex: WebGLTexture, src: HTMLCanvasElement, unit: number, which: 'A' | 'B'): void {
-    const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    const size = `${src.width}x${src.height}`;
-    const prev = which === 'A' ? this.sizeA : this.sizeB;
-    if (prev !== size) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-      if (which === 'A') this.sizeA = size;
-      else this.sizeB = size;
-    } else {
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    }
+    this.vao = gl.createVertexArray()!;
   }
 
   /** Celda de trama en px CSS para un zoom y su mezcla puntos/tono para un dpr. */
@@ -265,6 +216,26 @@ export class RisoPrinter {
     const cellPx = clamp(this.cell * zoom, this.minCellPx, this.maxCellPx);
     const cellDev = cellPx * dpr;
     return { cellPx, cellDev, screen: smoothstep(this.toneBelow, this.dotsAbove, cellDev) };
+  }
+
+  /** Corre fn midiendo su tiempo de GPU (si se mide y el navegador lo permite). */
+  gpu(kind: GpuKind, fn: () => void): void {
+    if (this.measure) this.collect();
+    const timer = this.measure ? this.timerExt() : null;
+    const q = timer ? this.begin(timer, kind) : null;
+    fn();
+    if (q && timer) this.gl.endQuery(timer.TIME_ELAPSED_EXT);
+  }
+
+  /** Si no hay consulta de tiempos, la única forma de medir la GPU es esperarla. */
+  get canTime(): boolean {
+    return this.measure && !!this.timerExt();
+  }
+
+  /** Espera a que la GPU termine todo lo encargado (leyendo un píxel: frena, pero mide). */
+  finish(): void {
+    const gl = this.gl;
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.pixel);
   }
 
   render(sep: Separation, v: PrintView): void {
@@ -275,18 +246,15 @@ export class RisoPrinter {
       this.canvas.width = W;
       this.canvas.height = H;
     }
-    if (this.measure) this.collect();
-    const timer = this.measure ? this.timerExt() : null;
-
-    const t0 = performance.now();
-    let q = timer ? this.begin(timer, 'gpuUpload') : null;
-    this.upload(this.texA, sep.c1, 0, 'A');
-    this.upload(this.texB, sep.c2, 1, 'B');
-    if (q && timer) gl.endQuery(timer.TIME_ELAPSED_EXT);
     const t1 = performance.now();
-
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.useProgram(this.prog);
+    gl.bindVertexArray(this.vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sep.texA);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, sep.texB);
     const u = this.u;
     gl.uniform1i(u.uA, 0);
     gl.uniform1i(u.uB, 1);
@@ -310,19 +278,8 @@ export class RisoPrinter {
     gl.uniform4fv(u.uPlate, v.plate);
     gl.uniform1f(u.uFeather, Math.max(1, v.feather));
     gl.uniform1f(u.uSeed, 0);
-    q = timer ? this.begin(timer, 'gpuDraw') : null;
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (q && timer) gl.endQuery(timer.TIME_ELAPSED_EXT);
-    const t2 = performance.now();
-
-    this.timing.upload = t1 - t0;
-    this.timing.draw = t2 - t1;
-    this.timing.sync = -1;
-    if (this.wait || (this.measure && !timer)) {
-      // Se espera a la GPU leyendo un píxel (frena, pero mide todo lo que la impresión le encargó).
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.pixel);
-      this.timing.sync = performance.now() - t0;
-    }
+    this.gpu('gpuDraw', () => gl.drawArrays(gl.TRIANGLES, 0, 3));
+    this.timing.draw = performance.now() - t1;
   }
 
   private timerExt(): TimerExt | null {
@@ -330,8 +287,9 @@ export class RisoPrinter {
     return this.timer;
   }
 
-  private begin(ext: TimerExt, kind: 'gpuUpload' | 'gpuDraw'): WebGLQuery | null {
-    if (this.queries.length > 8) return null;
+  private begin(ext: TimerExt, kind: GpuKind): WebGLQuery | null {
+    // Si alguna consulta no vuelve nunca, se descarta la más vieja en vez de dejar de medir.
+    if (this.queries.length > 8) this.gl.deleteQuery(this.queries.shift()!.q);
     const q = this.gl.createQuery();
     if (!q) return null;
     this.gl.beginQuery(ext.TIME_ELAPSED_EXT, q);

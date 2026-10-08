@@ -1,7 +1,11 @@
 import { PX, ISO_C, ISO_S, iso, groundRadii } from '../core/iso';
 import { Ink, KEY } from '../print/ink';
-import { Mode, type Op } from '../print/separation';
-import { ellipsePts, offsetPoly, strokePoly, tracePath, wobble, type Pts } from './hand';
+import { Mode, type Op, type Recording } from '../print/separation';
+import { ellipsePts, offsetPoly, strokePoly, wobble, type Pts } from './hand';
+import { Mesh, Shape } from './mesh';
+
+/** Cuánto puede apartarse una curva aplanada de la verdadera, en px de pantalla. */
+const FLAT = 0.3;
 
 export interface FillOpts {
   mode?: Mode;
@@ -34,8 +38,9 @@ export interface Material {
 }
 
 /**
- * Graba operaciones de tinta (no dibuja). Las escenas lo usan una vez por variante de
- * temblor para lo fijo, y en cada cuadro de animación para lo que se mueve.
+ * Graba operaciones de tinta (no dibuja): triángulos en px de mundo, listos para la GPU. Las
+ * escenas lo usan una vez por variante de temblor para lo fijo, y en cada cuadro de animación
+ * para lo que se mueve.
  */
 export class Drawer {
   ops: Op[] = [];
@@ -45,20 +50,44 @@ export class Drawer {
   alpha = 1;
   /** Zoom de cámara al grabar: sirve para decidir el nivel de detalle. */
   lod = 1;
+  /** Tolerancia del aplanado de curvas, en px de mundo (por defecto, FLAT px de pantalla al zoom lod). */
+  tol = FLAT;
   line = 1.1;
   private seed = 1;
   private v = 0;
   private n = 0;
+  private mesh = new Mesh();
+  /** Subcontornos de la última operación: orientación y rectángulo (de a cinco). */
+  private subs: number[] = [];
 
   begin(seed: number, variant: number, lod = 1): this {
     this.ops = [];
+    this.mesh.reset();
     this.b = [Infinity, Infinity, -Infinity, -Infinity];
-    this.seed = seed | 0;
+    this.reseed(seed);
     this.v = variant;
-    this.n = 0;
     this.lod = lod;
+    this.tol = FLAT / lod;
+    return this;
+  }
+
+  /** Sigue grabando en lo mismo con otra semilla (varias funciones en una sola grabación). */
+  reseed(seed: number): this {
+    this.seed = seed | 0;
+    this.n = 0;
     this.alpha = 1;
     this.amp = 0.55;
+    return this;
+  }
+
+  /** Lo grabado desde begin, listo para imprimir. */
+  take(): Recording {
+    return this.mesh.take(this.ops);
+  }
+
+  /** Grabación hecha para verse bien hasta el zoom z (lo fijo se graba una vez para todos). */
+  fine(z: number): this {
+    this.tol = FLAT / Math.max(z, this.lod);
     return this;
   }
 
@@ -91,31 +120,72 @@ export class Drawer {
   }
 
   /**
-   * Agrega una forma; Fill y Over consecutivos con la misma tinta se juntan en un solo Path2D.
+   * Agrega una forma; Fill y Over consecutivos con la misma tinta se juntan en una sola operación.
    * line marca la máscara de línea; axis y width son el eje y el grosor de un trazo.
+   * shape: Strip para el polígono de un trazo (se cose como tira); inner: el relleno que
+   * rodea este contorno (entonces solo se graba el anillo, porque el relleno lo tapa).
    */
-  push(m: Mode, pts: Pts, ink: Ink, closed = true, smooth = true, line = false, axis?: Pts, width = 0): void {
-    if (pts.length < 4) return;
+  push(m: Mode, pts: Pts, ink: Ink, smooth = true, line = false, axis?: Pts, width = 0, shape: Shape = Shape.Fill, inner?: Pts): void {
+    if (pts.length < 6) return;
     this.grow(pts);
-    const last = this.ops[this.ops.length - 1];
-    if (last && last.m === m && last.i === ink && last.a === this.alpha && !!last.l === line && (m === Mode.Fill || m === Mode.Over)) {
-      tracePath(last.p, pts, closed, smooth);
-      if (axis) {
-        if (!last.c) last.c = new Path2D();
-        tracePath(last.c, axis, false, true);
-        last.w = Math.min(last.w ?? Infinity, width);
-      }
-      return;
+    const mesh = this.mesh;
+    let op = this.ops[this.ops.length - 1];
+    if (!(op && op.m === m && op.i === ink && op.a === this.alpha && op.l === line && (m === Mode.Fill || m === Mode.Over) && this.alpha === 1)) {
+      op = { m, i: ink, a: this.alpha, l: line, u: false, v0: mesh.nv, v1: 0, t0: mesh.ni, t1: 0, s0: mesh.ns, s1: 0 };
+      this.ops.push(op);
+      this.subs.length = 0;
     }
-    const p = new Path2D();
-    tracePath(p, pts, closed, smooth);
-    const op: Op = { m, p, i: ink, a: this.alpha };
-    if (line) op.l = true;
-    if (axis) {
-      op.c = new Path2D();
-      tracePath(op.c, axis, false, true);
-      op.w = width;
+    if (this.overlaps(pts)) op.u = true;
+    if (inner) mesh.ring(pts, inner, smooth, this.tol);
+    else mesh.fill(pts, smooth, this.tol, shape);
+    if (axis) mesh.axis(axis, width);
+    op.v1 = mesh.nv;
+    op.t1 = mesh.ni;
+    op.s1 = mesh.ns;
+  }
+
+  /**
+   * Contornos juntados en una operación: si uno pisa a otro con la orientación contraria, el
+   * lienzo 2D (regla distinta de cero) dejaba sin pintar lo que se superpone. Esa operación
+   * se imprime contando vueltas, para que quede igual.
+   */
+  private overlaps(pts: Pts): boolean {
+    let a = 0;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    const n = pts.length >> 1;
+    for (let i = 0; i < n; i++) {
+      const j = i + 1 < n ? i + 1 : 0;
+      a += pts[2 * i] * pts[2 * j + 1] - pts[2 * j] * pts[2 * i + 1];
+      x0 = Math.min(x0, pts[2 * i]);
+      x1 = Math.max(x1, pts[2 * i]);
+      y0 = Math.min(y0, pts[2 * i + 1]);
+      y1 = Math.max(y1, pts[2 * i + 1]);
     }
+    const sg = a >= 0 ? 1 : -1;
+    const S = this.subs;
+    let hit = false;
+    for (let k = 0; k < S.length && !hit; k += 5) {
+      if (S[k] !== sg && S[k + 1] < x1 && x0 < S[k + 3] && S[k + 2] < y1 && y0 < S[k + 4]) hit = true;
+    }
+    S.push(sg, x0, y0, x1, y1);
+    return hit;
+  }
+
+  /** Varias regiones con una sola tinta, rellenas como un solo contorno (sin temblor ni suavizado). */
+  union(regions: Pts[], ink: Ink, m: Mode = Mode.Add): void {
+    const mesh = this.mesh;
+    const op: Op = { m, i: ink, a: this.alpha, l: false, u: true, v0: mesh.nv, v1: 0, t0: mesh.ni, t1: 0, s0: mesh.ns, s1: 0 };
+    for (const r of regions) {
+      if (r.length < 6) continue;
+      this.grow(r);
+      mesh.fill(r, false, this.tol);
+    }
+    op.v1 = mesh.nv;
+    op.t1 = mesh.ni;
+    op.s1 = mesh.ns;
     this.ops.push(op);
   }
 
@@ -123,11 +193,15 @@ export class Drawer {
     const seed = this.s();
     const amp = o.amp ?? this.amp;
     const w = amp > 0 ? wobble(pts, true, amp, seed, o.step ?? this.step) : pts;
+    const mode = o.mode ?? Mode.Fill;
+    const smooth = o.smooth ?? true;
     if (o.outline) {
       const oi = o.outlineInk ?? KEY;
-      this.push(Mode.Fill, offsetPoly(w, o.outline, seed), oi, true, o.smooth ?? true, oi.isLine);
+      // Si el relleno cala y es opaco, del contorno alcanza con el anillo.
+      const ring = mode === Mode.Fill && this.alpha === 1 ? w : undefined;
+      this.push(Mode.Fill, offsetPoly(w, o.outline, seed), oi, smooth, oi.isLine, undefined, 0, Shape.Fill, ring);
     }
-    this.push(o.mode ?? Mode.Fill, w, ink, true, o.smooth ?? true);
+    this.push(mode, w, ink, smooth);
   }
 
   /** Solo el contorno expandido (para dibujar varios rellenos que comparten silueta). */
@@ -135,7 +209,7 @@ export class Drawer {
     const seed = this.s();
     const a = amp ?? this.amp;
     const w = a > 0 ? wobble(pts, true, a, seed, this.step) : pts;
-    this.push(Mode.Fill, offsetPoly(w, width, seed), ink, true, true, ink.isLine);
+    this.push(Mode.Fill, offsetPoly(w, width, seed), ink, true, ink.isLine);
   }
 
   stroke(pts: Pts, w0: number, w1: number = w0, ink: Ink = KEY, o: StrokeOpts = {}): void {
@@ -145,11 +219,11 @@ export class Drawer {
     if (o.closed) c = pts.concat(pts[0], pts[1]);
     c = amp > 0 ? wobble(c, false, amp, seed, o.step ?? this.step) : c;
     const poly = strokePoly(c, w0, w1, o.taper0 ?? 0.2, o.taper1 ?? 0.2, seed, o.jitter ?? 0.35);
-    this.push(o.mode ?? Mode.Over, poly, ink, true, true, ink.isLine, c, Math.max(w0, w1));
+    this.push(o.mode ?? Mode.Over, poly, ink, true, ink.isLine, c, Math.max(w0, w1), Shape.Strip);
   }
 
   dot(x: number, y: number, r: number, ink: Ink, mode: Mode = Mode.Fill): void {
-    this.push(mode, ellipsePts(x, y, r, r, r > 3 ? 10 : 6), ink, true, true);
+    this.push(mode, ellipsePts(x, y, r, r, r > 3 ? 10 : 6), ink);
   }
 
   ellipse(cx: number, cy: number, rx: number, ry: number, ink: Ink, o: FillOpts = {}, rot = 0): void {

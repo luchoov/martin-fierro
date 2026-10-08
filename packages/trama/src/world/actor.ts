@@ -2,7 +2,8 @@ import { Rng } from '../core/rng';
 import { screenSide } from '../core/iso';
 import type { Vec2 } from '../core/math';
 import type { Drawer } from '../draw/drawer';
-import type { Op } from '../print/separation';
+import { EMPTY } from '../draw/mesh';
+import type { Recording } from '../print/separation';
 import type { Item, World } from './world';
 
 export type Task =
@@ -58,12 +59,13 @@ export abstract class Actor implements Item {
   seed: number;
   protected wp = 0;
   protected taskT = 0;
-  protected recorded: Op[] = [];
+  protected recorded: Recording = EMPTY;
   /** Velocidad actual (m/s), útil para animar el paso. */
   speed = 0;
   onClick?: (w: World, at: Vec2) => void;
   /** Mientras está montado o lo lleva otro actor, no se ordena ni dibuja por su cuenta. */
   carried = false;
+  slot?: number;
 
   constructor(readonly name: string, seed: number) {
     this.seed = seed;
@@ -71,7 +73,7 @@ export abstract class Actor implements Item {
     this.phase = this.rng.next();
   }
 
-  ops(): Op[] {
+  ops(): Recording {
     return this.recorded;
   }
 
@@ -198,7 +200,7 @@ export abstract class Actor implements Item {
   abstract record(d: Drawer, w: World): void;
 
   protected keep(d: Drawer): void {
-    this.recorded = d.ops;
+    this.recorded = d.take();
     this.b = d.b.slice();
   }
 }

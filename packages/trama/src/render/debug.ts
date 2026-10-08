@@ -4,10 +4,10 @@ import type { FrameStats, Stage } from './stage';
 const PARTS: { key: keyof FrameStats; label: string; color: string }[] = [
   { key: 'update', label: 'mundo', color: '#9a9a9a' },
   { key: 'tick', label: 'grabación', color: '#EBA834' },
-  { key: 'ground', label: 'piso', color: '#5C9DC9' },
-  { key: 'items', label: 'dibujo', color: '#C9392E' },
-  { key: 'upload', label: 'raster 2D + subida', color: '#26283A' },
-  { key: 'gpuDraw', label: 'shader', color: '#7a5aa6' },
+  { key: 'pack', label: 'armado', color: '#5C9DC9' },
+  { key: 'sep', label: 'separ. CPU', color: '#C9392E' },
+  { key: 'gpuSep', label: 'separ. GPU', color: '#26283A' },
+  { key: 'gpuDraw', label: 'shader GPU', color: '#7a5aa6' },
 ];
 
 const N = 180;
@@ -16,7 +16,6 @@ const N = 180;
  * Panel de medición (se abre con ?debug): cuánto cuesta cada paso del cuadro. Los tiempos de
  * CPU salen de performance.now(); los de GPU, de EXT_disjoint_timer_query_webgl2 si el
  * navegador lo ofrece, y si no, esperando a la GPU con una lectura de un píxel.
- * Ojo: con lienzo 2D acelerado, parte del dibujo se ejecuta recién al subirlo a la GPU.
  */
 export class DebugPanel {
   readonly el = document.createElement('aside');
@@ -67,11 +66,14 @@ export class DebugPanel {
     const i = this.head;
     this.head = (this.head + 1) % N;
     for (let k = 0; k < PARTS.length; k++) {
-      let v = s[PARTS[k].key] as number;
-      if (PARTS[k].key === 'gpuDraw') v = s.drawn ? Math.max(0, s.gpuDraw >= 0 ? s.gpuDraw : s.sync) : 0;
+      const key = PARTS[k].key;
+      let v = s[key] as number;
+      // Sin consulta de tiempos, la impresión entera esperando a la GPU va en la barra del shader.
+      if (key === 'gpuSep') v = s.drawn ? Math.max(0, s.gpuSep) : 0;
+      if (key === 'gpuDraw') v = s.drawn ? Math.max(0, s.gpuDraw >= 0 ? s.gpuDraw : s.sync) : 0;
       this.hist[i * PARTS.length + k] = v;
       // Promedio solo sobre los cuadros que dibujaron (los demás no cuestan nada).
-      if (s.drawn || PARTS[k].key === 'update' || PARTS[k].key === 'tick') {
+      if (s.drawn || key === 'update' || key === 'tick' || key === 'pack') {
         const a = this.avg[PARTS[k].key] ?? v;
         this.avg[PARTS[k].key] = a + (v - a) * 0.08;
       }
@@ -97,21 +99,25 @@ export class DebugPanel {
     const f = (v: number | undefined) => (v === undefined ? '  –  ' : v.toFixed(2).padStart(5));
     const p = stage.printer;
     const dprOut = stage.canvas.width / Math.max(1, stage.view.w);
-    const gpu = s.gpuDraw >= 0 ? `shader GPU  ${f(a.gpuDraw)} ms   subida GPU ${f(s.gpuUpload)}` : s.sync >= 0 ? `subida+shader (esperando GPU) ${f(a.gpuDraw)} ms` : 'shader GPU   sin medición';
-    const total = (a.update ?? 0) + (a.tick ?? 0) + (a.ground ?? 0) + (a.items ?? 0) + (a.upload ?? 0) + (a.draw ?? 0);
+    const gpu =
+      s.gpuDraw >= 0
+        ? `separ. GPU       ${f(a.gpuSep)} ms\nshader GPU       ${f(a.gpuDraw)} ms`
+        : s.sync >= 0
+          ? `impresión (esperando GPU) ${f(a.gpuDraw)} ms`
+          : 'GPU              sin medición';
+    const total = (a.update ?? 0) + (a.tick ?? 0) + (a.pack ?? 0) + (a.sep ?? 0) + (a.draw ?? 0);
     this.text.textContent = [
       `TRAMA · debug          calidad q${stage.quality}`,
       `${this.fps.toFixed(0).padStart(3)} cuadros/s · ${this.drawsPerS.toFixed(0).padStart(2)} impresos/s`,
       `mundo + cámara   ${f(a.update)} ms`,
       `grabación        ${f(a.tick)} ms  (al animar)`,
-      `piso             ${f(a.ground)} ms  ${s.cached ? 'caché' : 'redibujo'}`,
-      `dibujo           ${f(a.items)} ms  ${s.ops} ops`,
-      `raster 2D+subida ${f(a.upload)} ms  (el lienzo 2D se pinta al subirlo)`,
+      `armado           ${f(a.pack)} ms  (al animar)`,
+      `separ. (CPU)     ${f(a.sep)} ms  ${s.ops} ops · ${(s.verts / 1000).toFixed(0)}k vért.`,
       `shader (CPU)     ${f(a.draw)} ms`,
       `CPU por cuadro   ${f(total)} ms`,
       gpu,
       `lienzo  ${stage.canvas.width}×${stage.canvas.height} (×${dprOut.toFixed(2)})`,
-      `separ.  ${Math.round(stage.view.w * stage.sepScale)}×${Math.round(stage.view.h * stage.sepScale)} (×${stage.sepScale.toFixed(2)})`,
+      `separ.  ${Math.round(stage.view.w * stage.sepScale)}×${Math.round(stage.view.h * stage.sepScale)} (×${stage.sepScale.toFixed(2)}, suavizado ×${stage.samples})`,
       `zoom ${stage.camera.z.toFixed(2)} · celda ${p.cellDev.toFixed(1)} px disp · ${p.screen <= 0 ? 'tono' : p.screen >= 1 ? 'puntos' : `puntos ${(p.screen * 100).toFixed(0)}%`}`,
     ].join('\n');
     this.plot();
