@@ -13,7 +13,7 @@
   --franja: 44vh;
   --lado: 16px;
   --pie: max(10px, env(safe-area-inset-bottom));
-  --verso: 1.04rem;
+  --verso: clamp(1.04rem, 0.6rem + 1.2vw, 1.3rem);
   --interlinea: 1.44;
 }
 
@@ -175,10 +175,22 @@ body.sin-texto #columna {
   bottom: calc(var(--pie) + 2.3rem);
   max-height: calc(var(--franja) - 3.4rem);
   overflow: auto;
-  overscroll-behavior: contain;
+  scrollbar-width: thin;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
+}
+
+/* Tablet vertical: la franja es ancha, pero el renglón no. */
+.hoja,
+.folio {
+  max-width: 36rem;
+  margin-inline: auto;
+}
+
+/* Si el texto no entra, se desvanece abajo hasta llegar al final. */
+.hoja.desborda:not(.al-final) {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.4rem), transparent);
 }
 
 .hoja.activo {
@@ -239,7 +251,7 @@ body.sin-texto .hoja.activo {
 /* Intro y cierre: prosa corta */
 .hoja-intro,
 .hoja-cierre {
-  font-size: 0.98rem;
+  font-size: clamp(1rem, 0.6rem + 1vw, 1.15rem);
   line-height: 1.5;
 }
 
@@ -268,7 +280,7 @@ body.sin-texto .hoja.activo {
   margin: 0.8rem 0 0;
   padding-top: 0.6rem;
   border-top: 0.5px solid var(--filete);
-  font-size: 0.84rem;
+  font-size: 0.94rem;
   line-height: 1.3;
 }
 
@@ -291,7 +303,7 @@ body.sin-texto .hoja.activo {
 }
 
 .creditos {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   color: var(--tinta-suave);
 }
 
@@ -588,7 +600,7 @@ body[data-tipo='portada'] .ayuda {
   background: var(--papel-nota);
   border: 0.75px solid rgba(201, 57, 46, 0.5);
   box-shadow: 0 8px 20px -14px rgba(38, 40, 58, 0.55);
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   line-height: 1.45;
   animation: aparecer 0.35s ease both;
 }
