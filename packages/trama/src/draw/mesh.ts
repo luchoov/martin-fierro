@@ -9,6 +9,9 @@ export const EMPTY: Recording = { pos: new Float32Array(0), idx: new Uint32Array
 export const Shape = { Fill: 0, Strip: 1 } as const;
 export type Shape = (typeof Shape)[keyof typeof Shape];
 
+/** Tramos máximos en que se parte cada curva al aplanar. */
+const MAX_K = 8;
+
 /** Contornos que no se pudieron triangular del todo (para medir). */
 export const meshStats = { failed: 0 };
 
@@ -24,8 +27,6 @@ export class Mesh {
   nv = 0;
   ni = 0;
   ns = 0;
-  private sa: number[] = [];
-  private sb: number[] = [];
   private ks: number[] = [];
 
   reset(): void {
@@ -47,6 +48,19 @@ export class Mesh {
     this.pos[this.nv * 2] = x;
     this.pos[this.nv * 2 + 1] = y;
     return this.nv++;
+  }
+
+  /** Copia un contorno (aplanado si smooth) al final de los vértices; devuelve cuántos agregó. */
+  private contour(pts: Pts, smooth: boolean, tol: number, sym: boolean, reuse: boolean): number {
+    const n = pts.length >> 1;
+    while ((this.nv + n * MAX_K) * 2 > this.pos.length) this.pos = grow(this.pos);
+    const at = this.nv;
+    if (smooth) this.nv = flatten(pts, tol, this.pos, at, this.ks, sym, reuse);
+    else {
+      this.pos.set(pts, at * 2);
+      this.nv += n;
+    }
+    return this.nv - at;
   }
 
   private tri(a: number, b: number, c: number): void {
@@ -74,12 +88,10 @@ export class Mesh {
   /** Contorno cerrado relleno (regla distinta de cero, como fill() del lienzo). */
   fill(pts: Pts, smooth: boolean, tol: number, shape: Shape = Shape.Fill): void {
     if (pts.length < 6) return;
-    const P = smooth ? flatten(pts, tol, this.sa, this.ks, shape === Shape.Strip) : pts;
-    const m = P.length >> 1;
     const base = this.nv;
-    for (let i = 0; i < m; i++) this.vert(P[2 * i], P[2 * i + 1]);
+    const m = this.contour(pts, smooth, tol, shape === Shape.Strip, false);
     if (shape === Shape.Strip && m % 2 === 0) this.strip(base, m);
-    else this.poly(P, m, base);
+    else this.poly(m, base);
   }
 
   /**
@@ -89,17 +101,10 @@ export class Mesh {
   ring(outer: Pts, inner: Pts, smooth: boolean, tol: number): void {
     const n = outer.length >> 1;
     if (n < 3 || inner.length !== outer.length) return this.fill(outer, smooth, tol);
-    let O = outer;
-    let I = inner;
-    if (smooth) {
-      O = flatten(outer, tol, this.sa, this.ks, false);
-      I = flatten(inner, tol, this.sb, this.ks, false, true);
-    }
-    const m = O.length >> 1;
     const bo = this.nv;
-    for (let i = 0; i < m; i++) this.vert(O[2 * i], O[2 * i + 1]);
+    const m = this.contour(outer, smooth, tol, false, false);
     const bi = this.nv;
-    for (let i = 0; i < m; i++) this.vert(I[2 * i], I[2 * i + 1]);
+    this.contour(inner, smooth, tol, false, true);
     for (let i = 0; i < m; i++) {
       const j = (i + 1) % m;
       this.tri(bo + i, bo + j, bi + i);
@@ -117,7 +122,9 @@ export class Mesh {
   }
 
   /** Polígono general: abanico si es estrellado desde su centroide; si no, recorte de orejas. */
-  private poly(P: Pts, m: number, base: number): void {
+  private poly(m: number, base: number): void {
+    // Los vértices del contorno, en su lugar del búfer.
+    const P = this.pos.subarray(base * 2, (base + m) * 2);
     let a2 = 0;
     let cx = 0;
     let cy = 0;
@@ -161,9 +168,9 @@ function grow<T extends Float32Array | Uint32Array>(a: T): T {
  * sym: los vértices i y n-1-i usan el mismo k (los dos lados de un trazo quedan alineados).
  * reuse: usa los k de la llamada anterior (un contorno paralelo, como el anillo de un relleno).
  */
-function flatten(src: Pts, tol: number, out: number[], ks: number[], sym: boolean, reuse = false): number[] {
+function flatten(src: Pts, tol: number, out: Float32Array, at: number, ks: number[], sym: boolean, reuse: boolean): number {
   const n = src.length >> 1;
-  out.length = 0;
+  let o = at * 2;
   if (!reuse) {
     ks.length = n;
     for (let i = 0; i < n; i++) {
@@ -173,7 +180,7 @@ function flatten(src: Pts, tol: number, out: number[], ks: number[], sym: boolea
       const dx = (src[2 * h] + src[2 * j]) / 2 - src[2 * i];
       const dy = (src[2 * h + 1] + src[2 * j + 1]) / 2 - src[2 * i + 1];
       const dev = len(dx, dy) / 4;
-      ks[i] = Math.min(8, Math.max(1, Math.ceil(Math.sqrt(dev / tol))));
+      ks[i] = Math.min(MAX_K, Math.max(1, Math.ceil(Math.sqrt(dev / tol))));
     }
     if (sym) for (let i = 0; i < n >> 1; i++) ks[i] = ks[n - 1 - i] = Math.max(ks[i], ks[n - 1 - i]);
   }
@@ -188,10 +195,11 @@ function flatten(src: Pts, tol: number, out: number[], ks: number[], sym: boolea
     for (let q = 0; q < k; q++) {
       const t = q / k;
       const u = 1 - t;
-      out.push(u * u * sx + 2 * u * t * src[2 * i] + t * t * ex, u * u * sy + 2 * u * t * src[2 * i + 1] + t * t * ey);
+      out[o++] = u * u * sx + 2 * u * t * src[2 * i] + t * t * ex;
+      out[o++] = u * u * sy + 2 * u * t * src[2 * i + 1] + t * t * ey;
     }
   }
-  return out;
+  return o >> 1;
 }
 
 /**
@@ -199,7 +207,7 @@ function flatten(src: Pts, tol: number, out: number[], ks: number[], sym: boolea
  * (contornos que se cruzan), primero cura los cruces locales y después parte el polígono por
  * una diagonal válida; si ni así, deja lo que falta sin rellenar.
  */
-function earclip(P: Pts, ids: number[], sg: number, tri: (a: number, b: number, c: number) => void, depth: number): void {
+function earclip(P: Float32Array, ids: number[], sg: number, tri: (a: number, b: number, c: number) => void, depth: number): void {
   let n = ids.length;
   const nx = new Int32Array(n);
   const pv = new Int32Array(n);
