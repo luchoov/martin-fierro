@@ -106,9 +106,10 @@ body {
   right: var(--lado);
   bottom: var(--pie);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 0.3rem 1rem;
   padding-top: 0.5rem;
   border-top: 0.5px solid var(--filete);
   font-size: 0.8rem;
@@ -116,6 +117,10 @@ body {
   font-variant-numeric: oldstyle-nums;
   letter-spacing: 0.1em;
   color: var(--tinta-suave);
+}
+
+.folio-texto {
+  white-space: nowrap;
 }
 
 .marcas {
@@ -698,6 +703,82 @@ kbd {
   .ayuda {
     top: 14px;
     right: 14px;
+  }
+}
+
+/* ——— Celular acostado: poca altura. La columna se compacta y la lámina sigue mandando ——— */
+
+@media (min-width: 760px) and (min-aspect-ratio: 11/10) and (max-height: 560px) {
+  :root {
+    --lado: 20px;
+    --vert: 12px;
+    --verso: 1.02rem;
+    --interlinea: 1.42;
+  }
+
+  .cabeza {
+    display: none;
+  }
+
+  /* El texto arranca arriba, como en una página, y termina antes del folio. */
+  .hoja,
+  .hoja-estrofa,
+  .hoja-intro,
+  .hoja-cierre {
+    top: calc(var(--vert) + 0.3rem);
+    bottom: calc(var(--vert) + 3.6rem);
+    max-height: none;
+    transform: none;
+  }
+
+  .hoja-intro,
+  .hoja-cierre {
+    font-size: 1rem;
+  }
+
+  .nota {
+    width: min(19rem, 44vw);
+  }
+
+  .paso-portada {
+    padding: 10px var(--lado);
+  }
+
+  .tapa {
+    padding: 1.2rem 1.2rem 1rem;
+  }
+
+  .tapa-autor {
+    font-size: 0.85rem;
+  }
+
+  .tapa-titulo {
+    margin-top: 0.5rem;
+  }
+
+  .tapa-el {
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .tapa-nombre {
+    font-size: min(10vw, 15vh);
+  }
+
+  .tapa .ornamento {
+    margin: 0.7rem auto;
+  }
+
+  .tapa-sub {
+    font-size: 1.2rem;
+  }
+
+  .tapa-tintas {
+    margin: 0.8rem 0 0.5rem !important;
+  }
+
+  .tapa-seguir {
+    margin-top: 0.8rem !important;
   }
 }
 
