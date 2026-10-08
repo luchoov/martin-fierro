@@ -41,6 +41,8 @@ El build completo pesa **~50 KB comprimido**: anda en netbooks escolares y con m
 
 En escritorio el texto ocupa una columna fija a la izquierda (35 % del ancho); en el celular, una franja de papel abajo. No hay tarjetas flotantes: la lámina tiene **margen**, como un grabado en un libro. El shader desvanece la tinta en puntos cada vez más chicos antes de llegar al texto, y los encuadres se calculan en el espacio que queda libre. Cada estrofa nueva entra de arriba hacia abajo, como en la prensa; el número va en el margen y la capitular solo abre el canto.
 
+Con el celular acostado (poca altura) el texto va en la columna, más compacta: la tapa se achica con el alto y la estrofa arranca arriba. La franja del celular se calcula con un alto que cambia solo al rotar, así no salta cuando la barra del navegador aparece o se va, y todo respeta la muesca (`safe-area-inset-*`). Si el navegador no tiene WebGL2, el canto queda como un folleto: la tapa y todas las hojas, una abajo de otra (en desarrollo, `?sinwebgl` lo simula).
+
 ## Modo `?debug`
 
 Abrir con `?debug` (por ejemplo `http://localhost:5178/?debug`) muestra un panel con lo que cuesta cada paso del cuadro: mundo y cámara, grabación (cuadros de animación), piso, dibujo de las separaciones, rasterizado del lienzo 2D más la subida a la GPU, y el shader medido en la GPU (`EXT_disjoint_timer_query_webgl2`, o esperando a la GPU si el navegador no lo ofrece). Abajo, un gráfico apilado de los últimos 180 cuadros con líneas en 16,7 y 33 ms, y un recuadro punteado con el encuadre libre. `?q=0` … `?q=3` fija un escalón de calidad. El panel se descarga solo cuando se pide.
