@@ -1,9 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @obras/martin-fierro build",
-  "outputDirectory": "obras/martin-fierro/dist",
   "headers": [
     {
       "source": "/assets/(.*)",
