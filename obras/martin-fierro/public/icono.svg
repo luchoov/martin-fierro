@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Las cuatro tintas de la lámina, como en la tapa, con un poco de fuera de registro. -->
+  <rect width="64" height="64" fill="#f2e8d4"/>
+  <rect x="13" y="13" width="18" height="18" fill="#c9392e"/>
+  <rect x="33.6" y="12.4" width="18" height="18" fill="#eba834"/>
+  <rect x="12.4" y="33.6" width="18" height="18" fill="#5c9dc9"/>
+  <rect x="33" y="33" width="18" height="18" fill="#26283a"/>
+</svg>
