@@ -206,7 +206,17 @@ function layout(): void {
     stage.plate = { x0: -1, y0: -1, x1: 2, y1: top / h };
     stage.frame = { x0: 0.02, y0: 0.015, x1: 0.98, y1: (top - stage.feather * 0.5) / h };
   }
+  desborde();
 }
+
+/** Marca la hoja activa si su texto no entra (se desvanece abajo hasta llegar al final). */
+function desborde(): void {
+  const h = pasos[actual]?.hoja;
+  if (!h) return;
+  h.classList.toggle('desborda', h.scrollHeight > h.clientHeight + 1);
+  h.classList.toggle('al-final', h.scrollTop + h.clientHeight >= h.scrollHeight - 4);
+}
+for (const p of pasos) p.hoja?.addEventListener('scroll', desborde, { passive: true });
 
 let anchoPrevio = 0;
 function medidas(): void {
