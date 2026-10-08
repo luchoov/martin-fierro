@@ -1,5 +1,5 @@
 import { PX, groundRadii } from '../core/iso';
-import { clamp, lerp } from '../core/math';
+import { clamp, len, lerp } from '../core/math';
 import type { Drawer } from '../draw/drawer';
 import { ellipsePts, hull, limbPoly, type Pts } from '../draw/hand';
 import { Ink, KEY } from '../print/ink';
@@ -152,7 +152,7 @@ export class Human extends Actor {
         const i1 = Math.min(n - 1, i + 1);
         let tx = chain[2 * i1] - chain[2 * i0];
         let ty = chain[2 * i1 + 1] - chain[2 * i0 + 1];
-        const tl = Math.hypot(tx, ty) || 1;
+        const tl = len(tx, ty) || 1;
         tx /= tl;
         ty /= tl;
         let nx = -ty;
@@ -191,7 +191,7 @@ export class Human extends Actor {
     const drawHand = (W: P2, E: P2, ink: Ink, open = false) => {
       let ux = W[0] - E[0];
       let uy = W[1] - E[1];
-      const ul = Math.hypot(ux, uy) || 1;
+      const ul = len(ux, uy) || 1;
       ux /= ul;
       uy /= ul;
       const vx = -uy;
@@ -224,7 +224,7 @@ export class Human extends Actor {
       if (!what) return;
       let ux = W[0] - E[0];
       let uy = W[1] - E[1];
-      const ul = Math.hypot(ux, uy) || 1;
+      const ul = len(ux, uy) || 1;
       ux /= ul;
       uy /= ul;
       const c = add(W, ux, uy, 0.05 * k);
@@ -326,7 +326,7 @@ export class Human extends Actor {
           // Fleco del calzoncillo cribado.
           const dx = A[0] - K_[0];
           const dy = A[1] - K_[1];
-          const l = Math.hypot(dx, dy) || 1;
+          const l = len(dx, dy) || 1;
           const nx = -dy / l;
           const ny = dx / l;
           const z: Pts = [];
@@ -412,7 +412,7 @@ export class Human extends Actor {
       const perp = (A: P2, B: P2, s: number): number[] => {
         const dx = B[0] - A[0];
         const dy = B[1] - A[1];
-        const l = Math.hypot(dx, dy) || 1;
+        const l = len(dx, dy) || 1;
         return [B[0] - (dy / l) * s, B[1] + (dx / l) * s, B[0] + (dy / l) * s, B[1] - (dx / l) * s];
       };
       const pts = hull([
@@ -462,7 +462,7 @@ export class Human extends Actor {
       const outE = (E: P2, s: number) => {
         const dx = E[0] - J.S[0];
         const dy = E[1] - J.S[1];
-        const l = Math.hypot(dx, dy) || 1;
+        const l = len(dx, dy) || 1;
         return [E[0] + (dx / l) * s, E[1] + (dy / l) * s];
       };
       const pts = hull([
@@ -591,7 +591,7 @@ export class Human extends Actor {
       const c: P2 = [base[0] + 0.02 * k, base[1] + 0.11 * k];
       let ux = J.WF[0] - c[0];
       let uy = J.WF[1] - c[1];
-      const ul = Math.hypot(ux, uy) || 1;
+      const ul = len(ux, uy) || 1;
       ux /= ul;
       uy /= ul;
       const rot = Math.atan2(uy, ux);

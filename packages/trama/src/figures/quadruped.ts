@@ -1,5 +1,5 @@
 import { PX, groundRadii, iso } from '../core/iso';
-import { TAU, clamp, plateau, pulse, type Vec3 } from '../core/math';
+import { TAU, clamp, len, plateau, pulse, type Vec3 } from '../core/math';
 import type { Drawer } from '../draw/drawer';
 import { ellipsePts, hull, limbPoly, type Pts } from '../draw/hand';
 import { Ink, KEY } from '../print/ink';
@@ -419,7 +419,7 @@ export class Quadruped extends Actor {
       const [a, b] = [lg[2], lg[3]];
       const dx = b[0] - a[0];
       const dy = b[1] - a[1];
-      const l = Math.hypot(dx, dy) || 1;
+      const l = len(dx, dy) || 1;
       const hw = wv[2] * s * 0.62;
       const h = (S.kind === 'horse' ? 0.08 : 0.03) * s;
       const ux = dx / l;

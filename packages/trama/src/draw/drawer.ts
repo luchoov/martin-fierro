@@ -64,6 +64,8 @@ export class Drawer {
     this.ops = [];
     this.mesh.reset();
     this.b = [Infinity, Infinity, -Infinity, -Infinity];
+    // Las figuras cambian el paso del temblor: cada grabación empieza igual, se grabe lo que se grabe antes.
+    this.step = 7;
     this.reseed(seed);
     this.v = variant;
     this.lod = lod;

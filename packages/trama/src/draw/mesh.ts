@@ -1,3 +1,4 @@
+import { len } from '../core/math';
 import type { Op, Recording } from '../print/separation';
 import type { Pts } from './hand';
 
@@ -171,7 +172,7 @@ function flatten(src: Pts, tol: number, out: number[], ks: number[], sym: boolea
       // La curva se aparta de la cuerda |s - 2c + e| / 4, con s y e los puntos medios.
       const dx = (src[2 * h] + src[2 * j]) / 2 - src[2 * i];
       const dy = (src[2 * h + 1] + src[2 * j + 1]) / 2 - src[2 * i + 1];
-      const dev = Math.hypot(dx, dy) / 4;
+      const dev = len(dx, dy) / 4;
       ks[i] = Math.min(8, Math.max(1, Math.ceil(Math.sqrt(dev / tol))));
     }
     if (sym) for (let i = 0; i < n >> 1; i++) ks[i] = ks[n - 1 - i] = Math.max(ks[i], ks[n - 1 - i]);

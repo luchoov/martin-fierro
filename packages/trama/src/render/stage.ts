@@ -76,6 +76,8 @@ const LADDER = [
 
 /** Duración total de la pasada de prensa (s): cuatro tintas escalonadas. */
 const PRESS_END = 0.15 + 3 * 0.75 + 1.3;
+/** Margen (fracción de la vista por lado) de lo que se graba alrededor de lo que se ve. */
+const COVER = 0.25;
 
 /**
  * El escenario: un lienzo de pantalla completa donde se imprime el mundo. Une la cámara,
@@ -307,8 +309,13 @@ export class Stage {
     let ticked = false;
     const fps = Math.min(this.animFps, LADDER[this.q].fps);
     this.tickAcc += dt;
+    // Si la vista se salió de lo que se grabó, se graba ya (no puede faltar nada en cuadro).
+    const v = this.viewRect(0);
+    const cv = this.world.cover;
+    if (v[0] < cv[0] || v[1] < cv[1] || v[2] > cv[2] || v[3] > cv[3]) this.tickAcc = Math.max(this.tickAcc, 1 / fps);
     if (this.tickAcc >= 1 / fps) {
       this.tickAcc %= 1 / fps;
+      this.world.cover = this.viewRect(COVER);
       this.world.tick(this.drawer);
       ticked = true;
       const t2 = performance.now();
@@ -335,6 +342,16 @@ export class Stage {
     }
     this.drewLast = need;
     this.debug?.frame(st, this);
+  }
+
+  /** Lo que ve la cámara en px de mundo (x0 y0 x1 y1), agrandado en m veces su tamaño por lado. */
+  private viewRect(m: number): number[] {
+    const c = this.camera;
+    const [ax, ay] = this.anchor;
+    const { w, h } = this.view;
+    const mx = (m * w) / c.z;
+    const my = (m * h) / c.z;
+    return [c.x - ax / c.z - mx, c.y - ay / c.z - my, c.x + (w - ax) / c.z + mx, c.y + (h - ay) / c.z + my];
   }
 
   private animatePress(dt: number): boolean {
