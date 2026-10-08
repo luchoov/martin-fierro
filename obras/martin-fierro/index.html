@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Martín Fierro · Canto VIII</title>
+    <meta name="description" content="El Canto VIII de El Gaucho Martín Fierro, de José Hernández, como un diorama vivo impreso en risografía y dibujado en código." />
+    <meta name="theme-color" content="#F2E8D4" />
+  </head>
+  <body data-tipo="portada">
+    <canvas id="lamina" aria-hidden="true"></canvas>
+    <div id="columna">
+      <p class="cabeza" aria-hidden="true"></p>
+      <nav class="folio" aria-label="Estrofas"></nav>
+    </div>
+    <main id="relato" aria-label="Canto VIII"></main>
+    <button class="ayuda" type="button" aria-label="Cómo se mira la lámina" aria-expanded="false" aria-controls="nota">?</button>
+    <aside id="nota" class="nota" hidden></aside>
+    <noscript><p class="aviso">Esta lámina se dibuja con JavaScript.</p></noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

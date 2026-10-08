@@ -1,0 +1,11 @@
+node_modules
+dist
+.vite
+*.log
+
+# Configuración e instrucciones de asistentes y agentes
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/
+.github/copilot-instructions.md

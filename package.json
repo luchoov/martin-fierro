@@ -1,0 +1,14 @@
+{
+  "name": "martin-fierro-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @obras/martin-fierro dev",
+    "build": "pnpm --filter @obras/martin-fierro build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

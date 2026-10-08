@@ -1,0 +1,715 @@
+:root {
+  --papel: #f2e8d4;
+  --papel-nota: #f6eedd;
+  --tinta: #26283a;
+  --tinta-suave: rgba(38, 40, 58, 0.72);
+  --filete: rgba(38, 40, 58, 0.32);
+  --punzo: #c9392e;
+  --celeste: #5c9dc9;
+  --ocre: #eba834;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --alto: 100vh;
+  /* Celular: franja de papel abajo. Escritorio: columna a la izquierda (ver la media query). */
+  --franja: 44vh;
+  --lado: 16px;
+  --pie: max(10px, env(safe-area-inset-bottom));
+  --verso: 1.04rem;
+  --interlinea: 1.44;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--serif);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#lamina {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: block;
+  touch-action: pan-y;
+  cursor: grab;
+  background: var(--papel);
+}
+
+/* ——— El relato: pasos invisibles que marcan el ritmo del scroll ——— */
+
+#relato {
+  position: relative;
+  pointer-events: none;
+}
+
+.paso {
+  height: calc(var(--alto) * 1.1);
+}
+
+.paso-portada {
+  height: var(--alto);
+  display: grid;
+  place-items: center;
+  padding: 24px var(--lado);
+}
+
+.paso-intro {
+  height: calc(var(--alto) * 1.35);
+}
+
+.paso-cierre {
+  height: calc(var(--alto) * 1.7);
+}
+
+/* ——— Texto impreso sobre el mismo papel de la lámina ——— */
+
+.hoja,
+.tapa,
+#columna {
+  mix-blend-mode: multiply;
+}
+
+#columna {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--franja);
+  pointer-events: auto;
+  transition:
+    opacity 0.5s ease,
+    height 0.5s ease;
+}
+
+.cabeza {
+  display: none;
+  margin: 0;
+  justify-content: space-between;
+  gap: 1rem;
+  font-variant: small-caps;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  color: var(--tinta-suave);
+}
+
+.folio {
+  position: absolute;
+  left: var(--lado);
+  right: var(--lado);
+  bottom: var(--pie);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 0.5px solid var(--filete);
+  font-size: 0.8rem;
+  font-variant: small-caps;
+  font-variant-numeric: oldstyle-nums;
+  letter-spacing: 0.1em;
+  color: var(--tinta-suave);
+}
+
+.marcas {
+  display: flex;
+  gap: 2px;
+}
+
+.marca {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.marca::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: 0.75px solid var(--tinta-suave);
+  transform: rotate(45deg);
+}
+
+.marca.hecha::before {
+  background: var(--tinta-suave);
+}
+
+.marca.actual::before {
+  background: var(--punzo);
+  border-color: var(--punzo);
+  width: 8px;
+  height: 8px;
+}
+
+.marca:focus-visible {
+  outline: 1px solid var(--punzo);
+}
+
+body[data-tipo='portada'] #columna,
+body.sin-texto #columna {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hoja {
+  position: fixed;
+  left: var(--lado);
+  right: var(--lado);
+  bottom: calc(var(--pie) + 2.3rem);
+  max-height: calc(var(--franja) - 3.4rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.hoja.activo {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: 0.1s;
+}
+
+body.sin-texto .hoja.activo {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Estrofa: número en el margen, versos parejos */
+.hoja-estrofa {
+  padding-left: 2.3em;
+  font-size: var(--verso);
+}
+
+.num {
+  position: absolute;
+  left: 0;
+  top: 0.32em;
+  width: 1.7em;
+  margin: 0;
+  text-align: right;
+  font-size: 0.78em;
+  font-variant-numeric: oldstyle-nums;
+  letter-spacing: 0.04em;
+  color: var(--punzo);
+}
+
+.versos {
+  margin: 0;
+  line-height: var(--interlinea);
+}
+
+.versos .linea {
+  display: block;
+  padding-left: 1em;
+  text-indent: -1em;
+}
+
+/* Capitular: solo al empezar el canto. Sus versos no llevan sangría francesa (la pisaría). */
+.capitular .versos .linea {
+  padding-left: 0;
+  text-indent: 0;
+}
+
+.cap {
+  float: left;
+  font-size: 3.15em;
+  line-height: 0.82;
+  padding: 0.07em 0.08em 0 0;
+  color: var(--punzo);
+}
+
+/* Intro y cierre: prosa corta */
+.hoja-intro,
+.hoja-cierre {
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.hoja-intro p,
+.hoja-cierre p {
+  margin: 0 0 0.7em;
+}
+
+.rubro {
+  margin: 0 0 0.45rem;
+  font-size: 0.86rem;
+  font-weight: normal;
+  font-variant: small-caps;
+  letter-spacing: 0.16em;
+  color: var(--punzo);
+}
+
+.hoja .rubro ~ .rubro {
+  margin-top: 1.1rem;
+}
+
+.palabras {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 1.1rem;
+  margin: 0.8rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 0.5px solid var(--filete);
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.palabras dt,
+.palabras dd {
+  display: inline;
+}
+
+.palabras dt {
+  font-style: italic;
+}
+
+.palabras dt::after {
+  content: ': ';
+}
+
+.palabras dd {
+  margin: 0;
+  color: var(--tinta-suave);
+}
+
+.creditos {
+  font-size: 0.86rem;
+  color: var(--tinta-suave);
+}
+
+.volver {
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  font-size: 0.86rem;
+  font-variant: small-caps;
+  letter-spacing: 0.12em;
+  color: var(--punzo);
+  background: none;
+  border: 0.75px solid var(--punzo);
+  cursor: pointer;
+}
+
+/* ——— Pasar de página: la estrofa nueva entra como en la prensa, de arriba hacia abajo ——— */
+
+.hoja.activo .linea {
+  animation: imprimir 0.5s cubic-bezier(0.25, 0.7, 0.25, 1) both;
+  animation-delay: calc(90ms + var(--i, 0) * 45ms);
+}
+
+.hoja.activo .num {
+  animation: registro 0.55s ease-out both;
+}
+
+/* La capitular no se recorta: su línea entra fundida. */
+.capitular.activo .linea:first-child,
+body[data-sentido='atras'] .hoja.activo .linea {
+  animation-name: aparecer;
+  animation-duration: 0.3s;
+}
+
+body[data-sentido='atras'] .hoja.activo .linea {
+  animation-delay: 0s;
+}
+
+@keyframes imprimir {
+  from {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0.3;
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes registro {
+  from {
+    opacity: 0;
+    transform: translate(2px, -1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ——— Portada: la tapa del folleto ——— */
+
+.tapa {
+  position: relative;
+  pointer-events: auto;
+  width: min(100%, 44rem);
+  padding: 2.6rem 1.2rem 2.2rem;
+  text-align: center;
+  transition:
+    opacity 0.5s ease,
+    transform 0.6s ease;
+}
+
+.paso-portada:not(.activo) .tapa {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.corte {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 0 solid var(--tinta);
+}
+
+.corte.si {
+  top: 0;
+  left: 0;
+  border-top-width: 0.75px;
+  border-left-width: 0.75px;
+}
+
+.corte.sd {
+  top: 0;
+  right: 0;
+  border-top-width: 0.75px;
+  border-right-width: 0.75px;
+}
+
+.corte.ii {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 0.75px;
+  border-left-width: 0.75px;
+}
+
+.corte.id {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 0.75px;
+  border-right-width: 0.75px;
+}
+
+.tapa p {
+  margin: 0;
+  text-wrap: balance;
+}
+
+.tapa-autor {
+  font-variant: small-caps;
+  letter-spacing: 0.32em;
+  font-size: 0.95rem;
+}
+
+.tapa-titulo {
+  margin: 1.1rem 0 0;
+  font-weight: normal;
+  line-height: 0.95;
+}
+
+.tapa-el {
+  display: block;
+  font-size: clamp(1.1rem, 3.2vw, 1.7rem);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.tapa-nombre {
+  display: block;
+  font-size: clamp(2.6rem, 10vw, 6.6rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tapa .ornamento {
+  width: min(16rem, 70%);
+  margin: 1.4rem auto;
+}
+
+.tapa-canto {
+  font-variant: small-caps;
+  letter-spacing: 0.3em;
+  font-size: 1.05rem;
+  color: var(--punzo);
+}
+
+.tapa-sub {
+  margin-top: 0.3rem !important;
+  font-style: italic;
+  font-size: clamp(1.3rem, 3.4vw, 1.9rem);
+}
+
+.tapa-escena {
+  margin-top: 0.7rem !important;
+  font-size: 0.92rem;
+  color: var(--tinta-suave);
+}
+
+.tapa-tintas {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 1.6rem 0 0.9rem !important;
+}
+
+.tapa-tintas i {
+  width: 11px;
+  height: 11px;
+  background: var(--punzo);
+}
+
+.tapa-tintas i:nth-child(2) {
+  background: var(--ocre);
+}
+
+.tapa-tintas i:nth-child(3) {
+  background: var(--celeste);
+}
+
+.tapa-tintas i:nth-child(4) {
+  background: var(--tinta);
+}
+
+.tapa-imprenta {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--tinta-suave);
+}
+
+.tapa-seguir {
+  margin-top: 1.8rem !important;
+  font-variant: small-caps;
+  letter-spacing: 0.16em;
+  font-size: 0.86rem;
+  color: var(--punzo);
+}
+
+.tapa-seguir i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin: 0.5rem auto 0;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  animation: seguir 2.2s ease-in-out infinite;
+}
+
+@keyframes seguir {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 5px;
+  }
+}
+
+.ornamento {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.1rem 0;
+  color: var(--punzo);
+}
+
+.ornamento::before,
+.ornamento::after {
+  content: '';
+  flex: 1;
+  height: 0.5px;
+  background: currentColor;
+}
+
+.ornamento i {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+/* ——— Nota de instrucciones y botón de ayuda ——— */
+
+.ayuda {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--tinta);
+  background: var(--papel);
+  border: 0.75px solid var(--filete);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+body[data-tipo='portada'] .ayuda {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nota {
+  position: fixed;
+  top: 48px;
+  left: var(--lado);
+  right: var(--lado);
+  padding: 0.85rem 1rem 0.9rem;
+  background: var(--papel-nota);
+  border: 0.75px solid rgba(201, 57, 46, 0.5);
+  box-shadow: 0 8px 20px -14px rgba(38, 40, 58, 0.55);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  animation: aparecer 0.35s ease both;
+}
+
+.nota[hidden] {
+  display: none;
+}
+
+.nota ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.nota li + li {
+  margin-top: 0.15rem;
+}
+
+.entendido {
+  margin-top: 0.6rem;
+  padding: 0.25rem 0.75rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-variant: small-caps;
+  letter-spacing: 0.12em;
+  color: var(--punzo);
+  background: none;
+  border: 0.75px solid var(--punzo);
+  cursor: pointer;
+}
+
+kbd {
+  font-family: var(--serif);
+  font-size: 0.82em;
+  padding: 0 0.3em;
+  border: 0.5px solid rgba(38, 40, 58, 0.4);
+  border-radius: 2px;
+}
+
+.aviso {
+  position: fixed;
+  inset: auto 16px 16px;
+  padding: 1rem;
+  background: var(--papel-nota);
+}
+
+/* ——— Escritorio: el texto en una columna fija a la izquierda, la lámina a la derecha ——— */
+
+@media (min-width: 760px) and (min-aspect-ratio: 11/10) {
+  :root {
+    --col: clamp(330px, 35vw, 580px);
+    --lado: max(28px, 4.2vw);
+    --verso: clamp(1.05rem, 0.55rem + 0.8vw, 1.5rem);
+    --interlinea: 1.55;
+    --vert: max(20px, 4.5vh);
+  }
+
+  #columna {
+    top: 0;
+    right: auto;
+    width: var(--col);
+    height: auto;
+  }
+
+  .cabeza {
+    display: flex;
+    position: absolute;
+    top: var(--vert);
+    left: var(--lado);
+    right: 28px;
+    padding-bottom: 0.55rem;
+    border-bottom: 0.5px solid var(--filete);
+  }
+
+  .folio {
+    left: var(--lado);
+    right: 28px;
+    bottom: var(--vert);
+  }
+
+  .hoja {
+    left: var(--lado);
+    right: auto;
+    width: calc(var(--col) - var(--lado) - 28px);
+    bottom: auto;
+    max-height: calc(100vh - 2 * var(--vert) - 5.4rem);
+  }
+
+  /* Todas las estrofas empiezan a la misma altura: la de ocho versos queda centrada. */
+  .hoja-estrofa {
+    top: calc(50% - 4 * var(--interlinea) * var(--verso));
+  }
+
+  .hoja-intro,
+  .hoja-cierre {
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: clamp(0.88rem, 0.35rem + 0.45vw + 0.55vh, 1.1rem);
+  }
+
+  .hoja-intro p {
+    margin-bottom: 0.55em;
+  }
+
+  .nota {
+    top: auto;
+    left: auto;
+    right: 16px;
+    bottom: 16px;
+    width: 19rem;
+  }
+
+  .ayuda {
+    top: 14px;
+    right: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hoja.activo .linea,
+  .hoja.activo .num,
+  .tapa-seguir i,
+  .nota {
+    animation: none;
+  }
+
+  .tapa {
+    transition: none;
+  }
+}

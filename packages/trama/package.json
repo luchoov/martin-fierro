@@ -1,0 +1,14 @@
+{
+  "name": "trama",
+  "version": "0.1.0",
+  "description": "Motor de dioramas isométricos vivos con estética de impresión risográfica, dibujados enteramente en código.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./debug": "./src/render/debug.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}
