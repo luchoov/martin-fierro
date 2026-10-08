@@ -1,0 +1,222 @@
+[
+  {
+    "encuadre": "portada",
+    "rgb_final": {
+      "media_absoluta_0_255": 0.4935,
+      "p95_absoluto_0_255": 0.0,
+      "porcentaje_diferencia_mayor_16": 0.9166
+    },
+    "canales": {
+      "A": {
+        "media_absoluta_0_255": 0.1195,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.1883,
+        "cobertura_2d_porcentaje": 10.7285,
+        "cobertura_webgl2_porcentaje": 10.7091,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9971,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 99.9928
+      },
+      "B": {
+        "media_absoluta_0_255": 0.1505,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.2865,
+        "cobertura_2d_porcentaje": 17.2917,
+        "cobertura_webgl2_porcentaje": 17.2846,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "C": {
+        "media_absoluta_0_255": 0.1384,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.2198,
+        "cobertura_2d_porcentaje": 14.6388,
+        "cobertura_webgl2_porcentaje": 14.6151,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9995,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "clave": {
+        "media_absoluta_0_255": 0.7638,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.3843,
+        "cobertura_2d_porcentaje": 13.0739,
+        "cobertura_webgl2_porcentaje": 12.9998,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9982,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 99.997
+      },
+      "mascara_linea": {
+        "media_absoluta_0_255": 0.8686,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.2978,
+        "cobertura_2d_porcentaje": 2.4254,
+        "cobertura_webgl2_porcentaje": 2.0733,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9491,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 99.9963
+      }
+    }
+  },
+  {
+    "encuadre": "estrofa-224",
+    "rgb_final": {
+      "media_absoluta_0_255": 0.4019,
+      "p95_absoluto_0_255": 0.0,
+      "porcentaje_diferencia_mayor_16": 0.5827
+    },
+    "canales": {
+      "A": {
+        "media_absoluta_0_255": 0.1116,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.2577,
+        "cobertura_2d_porcentaje": 78.8382,
+        "cobertura_webgl2_porcentaje": 78.8339,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "B": {
+        "media_absoluta_0_255": 0.1586,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.3819,
+        "cobertura_2d_porcentaje": 96.1879,
+        "cobertura_webgl2_porcentaje": 96.1905,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "C": {
+        "media_absoluta_0_255": 0.1066,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.1492,
+        "cobertura_2d_porcentaje": 98.3755,
+        "cobertura_webgl2_porcentaje": 98.3771,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "clave": {
+        "media_absoluta_0_255": 0.8927,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.7595,
+        "cobertura_2d_porcentaje": 98.3482,
+        "cobertura_webgl2_porcentaje": 98.3482,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "mascara_linea": {
+        "media_absoluta_0_255": 0.9392,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.408,
+        "cobertura_2d_porcentaje": 11.3843,
+        "cobertura_webgl2_porcentaje": 11.4115,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      }
+    }
+  },
+  {
+    "encuadre": "estrofa-230",
+    "rgb_final": {
+      "media_absoluta_0_255": 0.3637,
+      "p95_absoluto_0_255": 0.0,
+      "porcentaje_diferencia_mayor_16": 0.6639
+    },
+    "canales": {
+      "A": {
+        "media_absoluta_0_255": 0.1467,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.2469,
+        "cobertura_2d_porcentaje": 24.1313,
+        "cobertura_webgl2_porcentaje": 24.1298,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9997,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 99.9952
+      },
+      "B": {
+        "media_absoluta_0_255": 0.1852,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.3818,
+        "cobertura_2d_porcentaje": 31.9555,
+        "cobertura_webgl2_porcentaje": 31.9552,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "C": {
+        "media_absoluta_0_255": 0.1569,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.233,
+        "cobertura_2d_porcentaje": 33.312,
+        "cobertura_webgl2_porcentaje": 33.31,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "clave": {
+        "media_absoluta_0_255": 0.8247,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.8661,
+        "cobertura_2d_porcentaje": 33.419,
+        "cobertura_webgl2_porcentaje": 33.4174,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "mascara_linea": {
+        "media_absoluta_0_255": 0.7185,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 1.1211,
+        "cobertura_2d_porcentaje": 3.3544,
+        "cobertura_webgl2_porcentaje": 3.2317,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.954,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      }
+    }
+  },
+  {
+    "encuadre": "detalle-224",
+    "rgb_final": {
+      "media_absoluta_0_255": 0.1865,
+      "p95_absoluto_0_255": 0.0,
+      "porcentaje_diferencia_mayor_16": 0.266
+    },
+    "canales": {
+      "A": {
+        "media_absoluta_0_255": 0.046,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.1103,
+        "cobertura_2d_porcentaje": 91.8035,
+        "cobertura_webgl2_porcentaje": 91.8008,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "B": {
+        "media_absoluta_0_255": 0.0637,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.1736,
+        "cobertura_2d_porcentaje": 97.4093,
+        "cobertura_webgl2_porcentaje": 97.4123,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "C": {
+        "media_absoluta_0_255": 0.0562,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.1089,
+        "cobertura_2d_porcentaje": 100.0,
+        "cobertura_webgl2_porcentaje": 100.0,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "clave": {
+        "media_absoluta_0_255": 0.35,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.6494,
+        "cobertura_2d_porcentaje": 100.0,
+        "cobertura_webgl2_porcentaje": 100.0,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 100.0,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      },
+      "mascara_linea": {
+        "media_absoluta_0_255": 0.3737,
+        "p95_absoluto_0_255": 0.0,
+        "porcentaje_diferencia_mayor_16": 0.5404,
+        "cobertura_2d_porcentaje": 10.2691,
+        "cobertura_webgl2_porcentaje": 10.2742,
+        "pixeles_2d_con_tinta_webgl2_a_2px_porcentaje": 99.9985,
+        "pixeles_webgl2_con_tinta_2d_a_2px_porcentaje": 100.0
+      }
+    }
+  }
+]

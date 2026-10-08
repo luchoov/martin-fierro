@@ -2,6 +2,14 @@ import { PX, ISO_C, ISO_S, iso, groundRadii } from '../core/iso';
 import { Ink, KEY } from '../print/ink';
 import { Mode, type Op } from '../print/separation';
 import { ellipsePts, offsetPoly, strokePoly, tracePath, wobble, type Pts } from './hand';
+import { aplanarCurva, segmentosEje, sentidoUniforme, triangular, triangularRegiones } from './geometry';
+
+interface Contornos {
+  puntos: Pts[];
+  sentido: number;
+  compuesto: boolean;
+  triangulos?: number[];
+}
 
 export interface FillOpts {
   mode?: Mode;
@@ -49,6 +57,10 @@ export class Drawer {
   private seed = 1;
   private v = 0;
   private n = 0;
+  private contornos = new WeakMap<Op, Contornos>();
+
+  /** El camino 2D sólo paga Path2D cuando se pide la comparación vieja. */
+  constructor(readonly raster2d = false) {}
 
   begin(seed: number, variant: number, lod = 1): this {
     this.ops = [];
@@ -90,31 +102,93 @@ export class Drawer {
     }
   }
 
+  private grabar(m: Mode, puntos: Pts[], tinta: Ink, compuesto = false): Op {
+    if (this.raster2d) return { m, i: tinta, a: this.alpha, t: [] };
+    const registro: Contornos = { puntos, sentido: compuesto ? 0 : sentidoUniforme(puntos[0] ?? []), compuesto };
+    const op: Op = {
+      m, i: tinta, a: this.alpha,
+      // Las operaciones consecutivas se siguen juntando. Recién al subir la
+      // malla se triangula una vez el contorno definitivo y queda cacheado.
+      get t(): number[] {
+        if (!registro.triangulos) {
+          if (registro.compuesto) registro.triangulos = triangularRegiones(registro.puntos);
+          else {
+            registro.triangulos = [];
+            for (const p of registro.puntos) {
+              const parte = triangular(p);
+              for (const coordenada of parte) registro.triangulos.push(coordenada);
+            }
+          }
+        }
+        return registro.triangulos;
+      },
+    };
+    this.contornos.set(op, registro);
+    return op;
+  }
+
   /**
-   * Agrega una forma; Fill y Over consecutivos con la misma tinta se juntan en un solo Path2D.
+   * Agrega una forma; Fill y Over consecutivos con la misma tinta se juntan en una operación.
    * line marca la máscara de línea; axis y width son el eje y el grosor de un trazo.
    */
   push(m: Mode, pts: Pts, ink: Ink, closed = true, smooth = true, line = false, axis?: Pts, width = 0): void {
     if (pts.length < 4) return;
     this.grow(pts);
+    const plano = this.raster2d ? [] : aplanarCurva(pts, closed, smooth);
     const last = this.ops[this.ops.length - 1];
     if (last && last.m === m && last.i === ink && last.a === this.alpha && !!last.l === line && (m === Mode.Fill || m === Mode.Over)) {
-      tracePath(last.p, pts, closed, smooth);
+      if (!this.raster2d) {
+        const registro = this.contornos.get(last)!;
+        // Los contornos de sentido contrario pueden cancelar el relleno donde
+        // se pisan: ahí hace falta triangular todo con la regla nonzero.
+        const sentido = sentidoUniforme(plano);
+        if (!sentido || !registro.sentido || sentido !== registro.sentido) registro.compuesto = true;
+        registro.puntos.push(plano);
+        registro.triangulos = undefined;
+        if (m === Mode.Fill && this.alpha < 1) last.once = true;
+      }
+      if (this.raster2d) tracePath(last.p!, pts, closed, smooth);
       if (axis) {
-        if (!last.c) last.c = new Path2D();
-        tracePath(last.c, axis, false, true);
+        if (!this.raster2d) {
+          const segmentos = segmentosEje(aplanarCurva(axis, false, true));
+          if (!last.s) last.s = [];
+          for (const coordenada of segmentos) last.s.push(coordenada);
+        }
+        if (this.raster2d) {
+          if (!last.c) last.c = new Path2D();
+          tracePath(last.c, axis, false, true);
+        }
         last.w = Math.min(last.w ?? Infinity, width);
       }
       return;
     }
-    const p = new Path2D();
-    tracePath(p, pts, closed, smooth);
-    const op: Op = { m, p, i: ink, a: this.alpha };
+    const op = this.grabar(m, [plano], ink);
+    if (this.raster2d) {
+      op.p = new Path2D();
+      tracePath(op.p, pts, closed, smooth);
+    }
     if (line) op.l = true;
     if (axis) {
-      op.c = new Path2D();
-      tracePath(op.c, axis, false, true);
+      if (!this.raster2d) op.s = segmentosEje(aplanarCurva(axis, false, true));
+      if (this.raster2d) {
+        op.c = new Path2D();
+        tracePath(op.c, axis, false, true);
+      }
       op.w = width;
+      if (m === Mode.Add || (m === Mode.Fill && this.alpha < 1)) op.once = true;
+    }
+    this.ops.push(op);
+  }
+
+  /** Un solo relleno nonzero: las regiones que se pisan reciben tinta una sola vez. */
+  regions(modo: Mode, regiones: Pts[], tinta: Ink): void {
+    const validas = regiones.filter(p => p.length >= 6);
+    if (!validas.length) return;
+    for (const p of validas) this.grow(p);
+    const op = this.grabar(modo, this.raster2d ? [] : validas.map(p => p.slice()), tinta, true);
+    if (this.raster2d) {
+      op.p = new Path2D();
+      for (const p of validas) tracePath(op.p, p, true, false);
     }
     this.ops.push(op);
   }

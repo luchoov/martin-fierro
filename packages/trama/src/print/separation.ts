@@ -12,15 +12,22 @@ export type Mode = (typeof Mode)[keyof typeof Mode];
 
 export interface Op {
   m: Mode;
-  p: Path2D;
+  /** Triángulos planos en px de mundo: seis números por triángulo. */
+  t: number[];
+  /** Camino viejo: sólo se graba con ?raster=2d. */
+  p?: Path2D;
   i: Ink;
   a: number;
   /** Línea de tinta clave: marca la máscara de línea, que se imprime plena y sin trama. */
   l?: boolean;
   /** Ejes de los trazos (para no dejarlos más finos que minLine px de pantalla). */
   c?: Path2D;
+  /** Segmentos independientes de eje [ax, ay, bx, by, ...]. */
+  s?: number[];
   /** Grosor nominal (px de mundo) del trazo más fino de la operación. */
   w?: number;
+  /** Evita aplicar dos veces la tinta donde una operación se pisa consigo misma. */
+  once?: boolean;
 }
 
 const COMPOSITE: GlobalCompositeOperation[] = ['source-over', 'lighten', 'lighter', 'multiply'];
@@ -108,6 +115,8 @@ export class Separation {
     this.count += ops.length;
     for (let n = 0; n < ops.length; n++) {
       const op = ops[n];
+      const p = op.p;
+      if (!p) throw new Error('El rasterizador 2D necesita operaciones grabadas con Drawer(true).');
       if (op.m !== mode) {
         mode = op.m;
         x1.globalCompositeOperation = x2.globalCompositeOperation = COMPOSITE[mode];
@@ -121,9 +130,9 @@ export class Separation {
       const axis = op.c && op.w! < thin ? op.c : null;
       if (mode === Mode.Fill) {
         x1.fillStyle = ink.s1;
-        x1.fill(op.p);
+        x1.fill(p);
         x2.fillStyle = s2;
-        x2.fill(op.p);
+        x2.fill(p);
         if (axis) {
           x1.strokeStyle = ink.s1;
           x1.stroke(axis);
@@ -133,16 +142,16 @@ export class Separation {
       } else if (mode === Mode.Sub) {
         if (ink.hasColor) {
           x1.fillStyle = ink.m1;
-          x1.fill(op.p);
+          x1.fill(p);
         }
         if (ink.k > 0) {
           x2.fillStyle = ink.m2;
-          x2.fill(op.p);
+          x2.fill(p);
         }
       } else {
         if (ink.hasColor) {
           x1.fillStyle = ink.s1;
-          x1.fill(op.p);
+          x1.fill(p);
           if (axis) {
             x1.strokeStyle = ink.s1;
             x1.stroke(axis);
@@ -150,7 +159,7 @@ export class Separation {
         }
         if (ink.k > 0 || op.l) {
           x2.fillStyle = s2;
-          x2.fill(op.p);
+          x2.fill(p);
           if (axis) {
             x2.strokeStyle = s2;
             x2.stroke(axis);

@@ -4,6 +4,7 @@ import { Drawer } from '../draw/drawer';
 import type { InkSet } from '../print/ink';
 import { RisoPrinter } from '../print/riso';
 import { Separation } from '../print/separation';
+import { GpuSeparation } from '../print/gpu-separation';
 import { World, type Item } from '../world/world';
 import { Camera } from './camera';
 import { Input } from './input';
@@ -49,9 +50,9 @@ export interface FrameStats {
   ticked: boolean;
   ground: number;
   items: number;
-  upload: number;
+  raster: number;
   draw: number;
-  gpuUpload: number;
+  gpuRaster: number;
   gpuDraw: number;
   sync: number;
   drawn: boolean;
@@ -93,14 +94,15 @@ export class Stage {
   resumeAfter = 14;
   onFrame?: (dt: number) => void;
   onSettle?: () => void;
-  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, ticked: false, ground: 0, items: 0, upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1, drawn: false, cached: false, ops: 0 };
+  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, ticked: false, ground: 0, items: 0, raster: 0, draw: 0, gpuRaster: -1, gpuDraw: -1, sync: -1, drawn: false, cached: false, ops: 0 };
   /** Panel de medición (?debug), si hay uno. */
   debug?: { frame(s: FrameStats, stage: Stage): void };
   /** Recorrido fijo de cámara (benchmark): x, y en px de mundo y zoom. Reemplaza al encuadre y a la entrada. */
   rail?: (dt: number) => [number, number, number];
-  private sep = new Separation();
+  readonly raster: 'webgl2' | '2d';
+  private sep: Separation | GpuSeparation;
   private caches: { sep: Separation; key: string }[] = [];
-  private drawer = new Drawer();
+  private drawer: Drawer;
   private shotSrc: Shot | (() => Shot) | null = null;
   private freeT = 0;
   private last = 0;
@@ -123,12 +125,15 @@ export class Stage {
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.printer = new RisoPrinter(canvas, opts.inks);
+    this.raster = new URLSearchParams(window.location.search).get('raster') === '2d' ? '2d' : 'webgl2';
+    this.drawer = new Drawer(this.raster === '2d');
+    this.sep = this.raster === '2d' ? new Separation() : new GpuSeparation(this.printer.gl);
     this.animFps = opts.animFps ?? 15;
     this.maxDpr = opts.maxDpr ?? 2;
     if (opts.reducedMotion) this.world.boilHz = 0;
     if (opts.autoPrint === false) this.pressDir = 0;
     this.fixedQ = opts.quality !== undefined;
-    for (let i = 0; i < 3; i++) this.caches.push({ sep: new Separation(), key: '' });
+    if (this.raster === '2d') for (let i = 0; i < 3; i++) this.caches.push({ sep: new Separation(), key: '' });
     new Input(canvas, this);
     const onResize = () => this.resize();
     window.addEventListener('resize', onResize);
@@ -140,8 +145,12 @@ export class Stage {
 
   /** Graba todo lo fijo. Llamar una vez que la escena está armada. */
   bake(): void {
-    this.world.bake(this.drawer);
-    this.world.tick(this.drawer);
+    const meshes = this.sep instanceof GpuSeparation ? this.sep : undefined;
+    meshes?.resetMeshes();
+    this.world.bake(this.drawer, meshes);
+    this.world.tick(this.drawer, meshes);
+    this.dirty = true;
+    for (const cache of this.caches) cache.key = '';
   }
 
   get anchor(): Vec2 {
@@ -300,7 +309,7 @@ export class Stage {
     this.tickAcc += dt;
     if (this.tickAcc >= 1 / fps) {
       this.tickAcc %= 1 / fps;
-      this.world.tick(this.drawer);
+      this.world.tick(this.drawer, this.sep instanceof GpuSeparation ? this.sep : undefined);
       ticked = true;
       st.tick = performance.now() - t1;
     }
@@ -319,7 +328,7 @@ export class Stage {
       this.dirty = false;
       this.draw(moving);
     } else {
-      st.ground = st.items = st.upload = st.draw = 0;
+      st.ground = st.items = st.raster = st.draw = 0;
     }
     this.drewLast = need;
     this.debug?.frame(st, this);
@@ -377,11 +386,12 @@ export class Stage {
     const [ax, ay] = this.anchor;
     const sep = this.sep;
     const t0 = performance.now();
-    sep.resize(w, h, this.sepScale);
+    if (sep instanceof GpuSeparation) sep.resize(w, h, this.sepScale, this.q < LADDER.length - 1);
+    else sep.resize(w, h, this.sepScale);
     sep.clear();
     sep.setView(c.x, c.y, c.z, ax, ay);
-    st.cached = !moving;
-    if (moving) {
+    st.cached = sep instanceof Separation && !moving;
+    if (sep instanceof GpuSeparation || moving) {
       this.world.renderGround(sep);
     } else {
       const cache = this.caches[this.world.variant];
@@ -395,9 +405,13 @@ export class Stage {
         st.cached = false;
       }
       sep.blit(cache.sep);
+      // La copia también reproduce las operaciones del piso, aunque no las vuelva a grabar.
+      sep.count += cache.sep.count;
     }
     const t1 = performance.now();
-    this.world.render(sep);
+    // Deja margen para el grosor mínimo y el desregistro de las tintas.
+    const pad = sep.minLine / c.z + 8;
+    this.world.render(sep, [c.x - ax / c.z - pad, c.y - ay / c.z - pad, c.x + (w - ax) / c.z + pad, c.y + (h - ay) / c.z + pad]);
     const t2 = performance.now();
     st.ground = t1 - t0;
     st.items = t2 - t1;
@@ -415,9 +429,9 @@ export class Stage {
       feather: this.feather,
     });
     const tm = this.printer.timing;
-    st.upload = tm.upload;
+    st.raster = tm.raster;
     st.draw = tm.draw;
-    st.gpuUpload = tm.gpuUpload;
+    st.gpuRaster = tm.gpuRaster;
     st.gpuDraw = tm.gpuDraw;
     st.sync = tm.sync;
   }
