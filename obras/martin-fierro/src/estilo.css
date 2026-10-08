@@ -903,6 +903,14 @@ kbd {
   }
 }
 
+/* Tablet acostada: la columna de escritorio, pero con letra de 16 px o más. */
+@media (pointer: coarse) and (min-width: 760px) and (min-aspect-ratio: 11/10) {
+  .hoja-intro,
+  .hoja-cierre {
+    font-size: clamp(1rem, 0.35rem + 0.45vw + 0.55vh, 1.1rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hoja.activo .linea,
   .hoja.activo .num,
