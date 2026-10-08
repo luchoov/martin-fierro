@@ -45,6 +45,8 @@ export interface FrameStats {
   update: number;
   /** Grabación de lo que se mueve (0 si en este cuadro no tocaba). */
   tick: number;
+  /** Si en este cuadro tocaba grabar (cuadro de animación). */
+  ticked: boolean;
   ground: number;
   items: number;
   upload: number;
@@ -91,9 +93,11 @@ export class Stage {
   resumeAfter = 14;
   onFrame?: (dt: number) => void;
   onSettle?: () => void;
-  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, ground: 0, items: 0, upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1, drawn: false, cached: false, ops: 0 };
+  readonly stats: FrameStats = { dt: 0, update: 0, tick: 0, ticked: false, ground: 0, items: 0, upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1, drawn: false, cached: false, ops: 0 };
   /** Panel de medición (?debug), si hay uno. */
   debug?: { frame(s: FrameStats, stage: Stage): void };
+  /** Recorrido fijo de cámara (benchmark): x, y en px de mundo y zoom. Reemplaza al encuadre y a la entrada. */
+  rail?: (dt: number) => [number, number, number];
   private sep = new Separation();
   private caches: { sep: Separation; key: string }[] = [];
   private drawer = new Drawer();
@@ -110,6 +114,7 @@ export class Stage {
   private pressT = 0;
   private pressDir = 1;
   private running = false;
+  private raf = 0;
   private wasMoving = true;
   private drewLast = false;
   private dirty = true;
@@ -161,16 +166,18 @@ export class Stage {
     return clamp(Math.min(w / (span * PX), h / (span * PX * 0.62)), this.camera.minZ, this.camera.maxZ);
   }
 
+  /** Posición de cámara (px de mundo) y zoom que corresponden a un encuadre. */
+  camFor(s: Shot): [number, number, number] {
+    const [x, y] = iso(s.x, s.y, s.z);
+    return [x, y, this.zoomFor(s.span)];
+  }
+
   /** Sigue un encuadre (fijo o calculado en cada cuadro). */
   shot(s: Shot | (() => Shot), immediate = false): void {
     this.shotSrc = s;
     this.free = false;
     this.freeT = 0;
-    if (immediate) {
-      const v = typeof s === 'function' ? s() : s;
-      const [x, y] = iso(v.x, v.y, v.z);
-      this.camera.jump(x, y, this.zoomFor(v.span));
-    }
+    if (immediate) this.camera.jump(...this.camFor(typeof s === 'function' ? s() : s));
   }
 
   /** Pasada de prensa: true imprime tinta por tinta; false levanta la tinta y vuelve el papel en blanco. */
@@ -240,11 +247,17 @@ export class Stage {
     if (this.running) return;
     this.running = true;
     this.last = performance.now();
-    requestAnimationFrame(this.loop);
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
+  /** Detiene el bucle propio (el benchmark avanza los cuadros con step). */
+  stop(): void {
+    this.running = false;
+    cancelAnimationFrame(this.raf);
   }
 
   private loop = (now: number) => {
-    requestAnimationFrame(this.loop);
+    this.raf = requestAnimationFrame(this.loop);
     const raw = (now - this.last) / 1000;
     this.last = now;
     // Solo el intervalo que sigue a un cuadro dibujado dice cuánto cuesta dibujar.
@@ -263,14 +276,17 @@ export class Stage {
       this.freeT += dt;
       if (this.freeT > this.resumeAfter) this.resumeFollow();
     }
-    if (!this.free && this.shotSrc) {
+    if (!this.free && this.shotSrc && !this.rail) {
       const s = typeof this.shotSrc === 'function' ? this.shotSrc() : this.shotSrc;
-      const [x, y] = iso(s.x, s.y, s.z);
-      this.camera.aim(x, y, this.zoomFor(s.span), s.stiffness ?? 2.6);
+      const [x, y, z] = this.camFor(s);
+      this.camera.aim(x, y, z, s.stiffness ?? 2.6);
     }
     this.onFrame?.(dt);
     this.world.update(dt);
-    this.camera.update(dt);
+    if (this.rail) {
+      const [x, y, z] = this.rail(dt);
+      this.camera.track(x, y, z, dt);
+    } else this.camera.update(dt);
     this.world.zoom = this.camera.z;
     const moving = this.camera.moving;
     if (this.wasMoving && !moving) this.onSettle?.();
@@ -288,6 +304,7 @@ export class Stage {
       ticked = true;
       st.tick = performance.now() - t1;
     }
+    st.ticked = ticked;
 
     const plateMoving = this.easePlate(dt);
     const c = this.camera;

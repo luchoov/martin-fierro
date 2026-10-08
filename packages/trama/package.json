@@ -6,7 +6,8 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
-    "./debug": "./src/render/debug.ts"
+    "./debug": "./src/render/debug.ts",
+    "./bench": "./src/render/bench.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

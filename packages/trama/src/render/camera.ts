@@ -34,6 +34,21 @@ export class Camera {
     this.ix = this.iy = 0;
   }
 
+  /**
+   * Lleva la cámara por un riel (recorrido fijo del benchmark): la pone en el punto y deja
+   * como velocidad la del recorrido, así `moving` dice lo mismo que con un paneo real.
+   */
+  track(x: number, y: number, z: number, dt: number): void {
+    const k = dt > 0 ? 1 / dt : 0;
+    this.vx = (x - this.x) * k;
+    this.vy = (y - this.y) * k;
+    this.vz = (Math.log(z) - Math.log(this.z)) * k;
+    this.x = this.tx = x;
+    this.y = this.ty = y;
+    this.z = this.tz = z;
+    this.ix = this.iy = 0;
+  }
+
   /** Mueve cámara y objetivo juntos (arrastre directo). */
   pan(dx: number, dy: number): void {
     this.x += dx;

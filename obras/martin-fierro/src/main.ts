@@ -1,10 +1,13 @@
 import './estilo.css';
 import { Stage, clamp } from 'trama';
+import type { BenchOptions } from 'trama/bench';
 import { crearPulperia } from './escenas/pulperia';
 import { PAMPA } from './tintas';
 import { ANTES, CANTO, DESPUES, ESTROFAS, PALABRAS } from './texto/canto8';
 
 const params = new URLSearchParams(location.search);
+/** ?bench: recorrido fijo de cámara que mide cada etapa del cuadro (?bench=manual sin requestAnimationFrame). */
+const bench = params.has('bench');
 const canvas = document.getElementById('lamina') as HTMLCanvasElement;
 const relato = document.getElementById('relato') as HTMLElement;
 const columna = document.getElementById('columna') as HTMLElement;
@@ -154,7 +157,8 @@ function saltar(k: number): void {
 let stage: Stage;
 try {
   const q = params.get('q');
-  stage = new Stage(canvas, { inks: PAMPA, reducedMotion: reduced, autoPrint: false, quality: q === null ? undefined : Number(q) });
+  // El benchmark fija la calidad (la mejor, salvo ?q): si se adaptara, no se podría comparar.
+  stage = new Stage(canvas, { inks: PAMPA, reducedMotion: reduced, autoPrint: false, quality: q === null ? (bench ? 0 : undefined) : Number(q) });
 } catch (err) {
   console.error(err);
   document.body.append(el('p', 'aviso', 'Este navegador no puede imprimir la lámina (hace falta WebGL2). El texto sigue disponible.'));
@@ -243,7 +247,7 @@ function irA(k: number): void {
     m.classList.toggle('actual', i === n);
   });
   layout();
-  if (p.tipo === 'estrofa') mostrarNotaUnaVez();
+  if (p.tipo === 'estrofa' && !bench) mostrarNotaUnaVez();
 }
 
 irA(0);
@@ -318,6 +322,10 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape' && !nota.hidden) abrirNota(false);
 });
 
+// ——— Benchmark (?bench): se baja solo si se pide ———
+const medir = async (opts: BenchOptions = {}) => (await import('./medir')).medir({ stage, escena, pasos, irA, io }, opts);
+if (bench) window.setTimeout(() => void medir({ manual: params.get('bench') === 'manual' }), 1500);
+
 stage.start();
 // Para jugar desde la consola.
-(window as unknown as { trama: unknown }).trama = { stage, escena, irA, pasos };
+(window as unknown as { trama: unknown }).trama = { stage, escena, irA, pasos, medir };

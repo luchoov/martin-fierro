@@ -47,6 +47,17 @@ Abrir con `?debug` (por ejemplo `http://localhost:5178/?debug`) muestra un panel
 
 Ojo al leerlo: Chrome pinta el lienzo 2D recién cuando se lo sube a la GPU, así que **«raster 2D + subida»** incluye el rasterizado de todas las formas. En las primeras mediciones es, lejos, lo más caro.
 
+## Modo `?bench`
+
+`?bench` (por ejemplo `http://localhost:5178/?bench`) corre un recorrido fijo de cámara a los 1,5 s de cargar y al terminar muestra una tabla con la **mediana y el percentil 95** de cada etapa, que se copia en Markdown con un botón (también sale en la consola). Hay que dejar la pestaña visible y no tocar nada mientras mide (unos 40 s).
+
+- **Tramos**: lejos (portada de la escena), cerca (estrofa 224) y atardecer (estrofa 230); en cada uno, cámara quieta, paneo y zoom de lejos a cerca y de vuelta. Las filas «todo quieto / paneo / zoom» juntan los casos.
+- **Reproducible**: la cámara va por un riel (`stage.rail`), el mundo avanza con un paso fijo de 1/60 s, la prensa ya pasó, el atardecer ya cayó y la calidad queda fija en `q0` (o la de `?q=`).
+- **Dos pasadas**: *fluido* mide los cuadros reales (cuadros por segundo, porcentaje de cuadros de más de 20 ms) y los tiempos de CPU; *desglose* espera a la GPU después de cada impresión y da **«impresión+GPU»**: piso + dibujo + rasterizado del lienzo 2D + subida + shader, lo que de otro modo queda escondido en la GPU. La columna **shader GPU** aparece si el navegador ofrece `EXT_disjoint_timer_query_webgl2`.
+- `?bench=manual` avanza sin `requestAnimationFrame` (por ejemplo, con la pestaña oculta) y hace solo el desglose. Desde la consola: `await trama.medir({ manual: true })`.
+
+Para comparar antes y después conviene la misma ventana (la tabla anota vista, dpr, GPU y tamaño de las separaciones).
+
 ## La escena: Canto VIII, estrofas 222–230
 
 | Momento | Estrofa | Qué pasa |

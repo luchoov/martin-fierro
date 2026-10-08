@@ -188,6 +188,8 @@ export class RisoPrinter {
   press: [number, number, number, number] = [1, 1, 1, 1];
   /** Medir tiempos de GPU (modo ?debug). */
   measure = false;
+  /** Esperar a la GPU después de cada impresión (benchmark): sync mide raster 2D + subida + shader. */
+  wait = false;
   readonly timing: PrintTiming = { upload: 0, draw: 0, gpuUpload: -1, gpuDraw: -1, sync: -1 };
   /** Celda (px de dispositivo) y mezcla puntos/tono del último cuadro. */
   cellDev = 0;
@@ -316,8 +318,8 @@ export class RisoPrinter {
     this.timing.upload = t1 - t0;
     this.timing.draw = t2 - t1;
     this.timing.sync = -1;
-    if (this.measure && !timer) {
-      // Sin consulta de tiempos: se espera a la GPU leyendo un píxel (frena, pero mide).
+    if (this.wait || (this.measure && !timer)) {
+      // Se espera a la GPU leyendo un píxel (frena, pero mide todo lo que la impresión le encargó).
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.pixel);
       this.timing.sync = performance.now() - t0;
     }
