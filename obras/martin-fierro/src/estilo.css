@@ -809,6 +809,69 @@ kbd {
   }
 }
 
+/* ——— Sin WebGL2: el canto como un folleto, sin la lámina ——— */
+
+.sin-lamina #lamina,
+.sin-lamina #columna,
+.sin-lamina .ayuda,
+.sin-lamina .nota {
+  display: none;
+}
+
+.sin-lamina #relato {
+  pointer-events: auto;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 0 var(--der) max(3rem, env(safe-area-inset-bottom)) var(--izq);
+}
+
+.sin-lamina .paso {
+  height: auto;
+}
+
+.sin-lamina .paso-portada {
+  min-height: var(--alto);
+  height: auto;
+  padding-inline: 0;
+}
+
+.sin-lamina .paso-portada .tapa {
+  opacity: 1;
+  transform: none;
+}
+
+.sin-lamina .tapa-seguir i {
+  animation: none;
+}
+
+.sin-lamina .hoja {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0 0 2.6rem;
+  overflow: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  mask-image: none;
+}
+
+.sin-lamina .hoja .linea,
+.sin-lamina .hoja .num {
+  animation: none;
+}
+
+.sin-lamina .aviso {
+  position: static;
+  margin: 0 0 2.6rem;
+  padding: 0.85rem 1rem 0.9rem;
+  border: 0.75px solid rgba(201, 57, 46, 0.5);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
 /* ——— Táctil: zonas de toque de 44 px sin engordar el dibujo ——— */
 
 @media (pointer: coarse) {

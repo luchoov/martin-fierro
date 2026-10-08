@@ -157,11 +157,22 @@ function saltar(k: number): void {
 let stage: Stage;
 try {
   const q = params.get('q');
+  // ?sinwebgl (solo en desarrollo) prueba la página sin la lámina.
+  if (import.meta.env.DEV && params.has('sinwebgl')) throw new Error('Trama necesita WebGL2 (simulado)');
   // El benchmark fija la calidad (la mejor, salvo ?q): si se adaptara, no se podría comparar.
   stage = new Stage(canvas, { inks: PAMPA, reducedMotion: reduced, autoPrint: false, quality: q === null ? (bench ? 0 : undefined) : Number(q) });
 } catch (err) {
   console.error(err);
-  document.body.append(el('p', 'aviso', 'Este navegador no puede imprimir la lámina (hace falta WebGL2). El texto sigue disponible.'));
+  // Sin la lámina, el canto queda como un folleto: la tapa y todas las hojas, una abajo de otra.
+  document.body.classList.add('sin-lamina');
+  relato.insertBefore(
+    el(
+      'p',
+      'aviso',
+      'Este navegador no puede imprimir la lámina: hace falta WebGL2. El canto se lee igual, acá abajo. Para ver la escena, probá con otro navegador o actualizá este.',
+    ),
+    pasos[1].sec,
+  );
   throw err;
 }
 // El panel de medición se baja solo si se pide.
