@@ -1,0 +1,2 @@
+- [Use pnpm](use-pnpm.md) — always pnpm; global shim broken here, use `corepack pnpm`
+- [Project Trama](project-trama.md) — vision: living risograph scrollytelling of Martín Fierro, engine "Trama", one scene at a time

@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>html,body{margin:0;overflow:hidden}iframe{position:fixed;inset:0;width:1200px;height:630px;border:0}</style>
+<iframe id="f" src="/?og"></iframe>
+<script>
+  // Imagen para compartir: la lámina impresa, sin texto, a 1200×630.
+  localStorage.setItem('trama.martin-fierro.nota', '1');
+  f.onload = () => setTimeout(() => {
+    const W = f.contentWindow, D = f.contentDocument;
+    const s = D.createElement('style');
+    s.textContent = 'html{scrollbar-width:none}#columna,#relato,.ayuda,.nota{visibility:hidden!important}';
+    D.head.append(s);
+    W.scrollTo(0, W.trama.pasos[1].sec.offsetTop + 100);
+    setTimeout(() => {
+      W.trama.irA(1);
+      W.trama.stage.print(true, true);
+      D.body.classList.add('sin-texto');
+      W.dispatchEvent(new Event('resize'));
+    }, 1000);
+  }, 2500);
+</script>

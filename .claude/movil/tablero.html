@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Tablero</title>
+<body style="margin:0;background:#888;display:flex;gap:10px;padding:6px;align-items:flex-start"></body>
+<script>
+  // Tres tamaños a la vez, a escala. ?tam=390x844x0.6,844x390x0.6 cambia la lista.
+  const lista = (new URLSearchParams(location.search).get('tam') || '390x844x0.6,844x390x0.6,768x1024x0.5').split(',').map((s) => s.split('x').map(Number));
+  localStorage.setItem('trama.martin-fierro.nota', '1');
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  window.marcos = lista.map(([w, h, s]) => {
+    const d = document.createElement('div');
+    d.style.cssText = `width:${w * s}px;height:${h * s}px;overflow:hidden;flex:none;outline:1px solid #333`;
+    const f = document.createElement('iframe');
+    f.src = '/?' + w;
+    f.style.cssText = `width:${w}px;height:${h}px;border:0;transform:scale(${s});transform-origin:0 0`;
+    d.append(f);
+    document.body.append(d);
+    return f;
+  });
+  const sinBarra = (f) => {
+    const s = f.contentDocument.createElement('style');
+    s.textContent = 'html{scrollbar-width:none}';
+    f.contentDocument.head.append(s);
+  };
+  window.recargar = async () => {
+    await Promise.all(marcos.map((f) => new Promise((r) => { f.onload = r; f.contentWindow.location.reload(); })));
+    await espera(1200);
+    marcos.forEach(sinBarra);
+  };
+  // Sincrónico: con la ventana tapada Chrome frena los timers y no corre requestAnimationFrame.
+  window.ir = (k, cuadros = 240) => {
+    for (const f of marcos) {
+      const W = f.contentWindow, T = W.trama, sec = T.pasos[k].sec;
+      W.scrollTo(0, k === 0 ? 0 : sec.offsetTop + Math.min(sec.offsetHeight / 2, W.innerHeight * 0.6));
+      T.irA(k);
+      if (k > 0) T.stage.print(true, true);
+      for (let i = 0; i < cuadros; i++) T.stage.step(1 / 60);
+      f.contentDocument.getAnimations().forEach((a) => { if (a.effect?.getTiming().iterations !== Infinity) try { a.finish(); } catch {} });
+    }
+    return marcos.map((f) => f.contentWindow.trama.pasos.findIndex((p) => p.sec.classList.contains('activo')));
+  };
+  window.tactil = () => {
+    for (const f of marcos) {
+      for (const s of f.contentDocument.styleSheets) for (const r of s.cssRules) if (r.media && r.media.mediaText.includes('pointer: coarse')) r.media.mediaText = 'all';
+      f.contentWindow.dispatchEvent(new Event('resize'));
+    }
+  };
+  window.addEventListener('load', () => setTimeout(() => marcos.forEach(sinBarra), 1500));
+</script>
